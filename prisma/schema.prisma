@@ -1,13 +1,422 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// ============================================================
+// PRISMA SCHEMA — WiFi Management System
+// ============================================================
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+// ============================================================
+// ENUM DEFINITIONS
+// ============================================================
+
+enum UserStatus {
+  PENDING      // baru daftar, belum diapprove admin
+  ACTIVE       // aktif berlangganan
+  SUSPENDED    // disuspend (nunggak / manual admin)
+  INACTIVE     // berhenti berlangganan
+}
+
+enum AdminRole {
+  SUPERADMIN   // akses penuh
+  ADMIN        // operasional harian
+  TECHNICIAN   // hanya lihat & tiket
+}
+
+enum InvoiceStatus {
+  UNPAID       // belum dibayar
+  PENDING      // bukti sudah diupload, menunggu validasi
+  PAID         // sudah lunas
+  OVERDUE      // lewat jatuh tempo
+  CANCELLED    // dibatalkan
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  QRIS
+  CASH
+  AUTO_GATEWAY  // payment gateway otomatis
+}
+
+enum PaymentStatus {
+  PENDING       // menunggu validasi
+  APPROVED      // diapprove admin
+  REJECTED      // ditolak admin
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum NotificationType {
+  INVOICE_CREATED
+  INVOICE_REMINDER
+  PAYMENT_RECEIVED
+  PAYMENT_APPROVED
+  PAYMENT_REJECTED
+  ACCOUNT_ACTIVATED
+  ACCOUNT_SUSPENDED
+  ACCOUNT_REACTIVATED
+  TICKET_REPLIED
+  OTP_CODE
+  WELCOME
+}
+
+enum NotificationChannel {
+  EMAIL
+  WHATSAPP  // untuk upgrade nanti
+}
+
+// ============================================================
+// USER (PELANGGAN)
+// ============================================================
+
+model User {
+  id                String      @id @default(cuid())
+  fullName          String
+  email             String?     @unique
+  phone             String      @unique  // nomor WA aktif
+  address           String
+  district          String?     // kecamatan
+  city              String?     // kota/kabupaten
+  province          String?
+  latitude          Float?      // koordinat lokasi
+  longitude         Float?
+  customerCode      String      @unique  // WIFI-00001
+  status            UserStatus  @default(PENDING)
+  password          String?     // nullable, set saat aktivasi
+  activationToken   String?     @unique
+  activationExpiry  DateTime?
+  activatedAt       DateTime?
+  notes             String?     // catatan dari admin
+  profilePhoto      String?     // URL foto profil
+
+  // Relasi
+  packageId         String?
+  package           Package?    @relation(fields: [packageId], references: [id])
+  invoices          Invoice[]
+  payments          Payment[]
+  tickets           Ticket[]
+  otpCodes          OtpCode[]
+  notifications     Notification[]
+  loginLogs         LoginLog[]
+  registrationId    String?     @unique
+  registration      Registration? @relation(fields: [registrationId], references: [id])
+
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([phone])
+  @@index([customerCode])
+  @@index([status])
+}
+
+// ============================================================
+// ADMIN
+// ============================================================
+
+model Admin {
+  id            String      @id @default(cuid())
+  fullName      String
+  email         String      @unique
+  phone         String?
+  password      String
+  role          AdminRole   @default(ADMIN)
+  isActive      Boolean     @default(true)
+  lastLoginAt   DateTime?
+  profilePhoto  String?
+
+  // Relasi — semua aksi yang dilakukan admin
+  approvedRegistrations  Registration[]  @relation("ApprovedBy")
+  processedPayments      Payment[]       @relation("ProcessedBy")
+  repliedTickets         TicketReply[]   @relation("RepliedBy")
+  generatedInvoices      Invoice[]       @relation("GeneratedBy")
+  loginLogs              LoginLog[]
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+// ============================================================
+// PAKET WIFI
+// ============================================================
+
+model Package {
+  id            String    @id @default(cuid())
+  name          String    // "Paket Basic", "Paket Pro"
+  slug          String    @unique  // "paket-basic"
+  description   String?
+  price         Int       // harga per bulan (rupiah)
+  speedDown     Int       // download Mbps
+  speedUp       Int       // upload Mbps
+  quota         Int?      // GB, null = unlimited
+  isUnlimited   Boolean   @default(true)
+  features      String[]  // ["Tanpa FUP", "Support 24/7"]
+  isActive      Boolean   @default(true)
+  color         String?   // warna untuk UI (#hex)
+  isPopular     Boolean   @default(false)  // badge "Terpopuler"
+  sortOrder     Int       @default(0)
+
+  // Relasi
+  users         User[]
+  invoices      Invoice[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([isActive])
+}
+
+// ============================================================
+// PENDAFTARAN (dari landing page)
+// ============================================================
+
+model Registration {
+  id            String    @id @default(cuid())
+  fullName      String
+  phone         String
+  email         String?
+  address       String
+  district      String?
+  city          String?
+  latitude      Float?
+  longitude     Float?
+  packageId     String
+  notes         String?   // catatan dari calon pelanggan
+  status        String    @default("PENDING")  // PENDING, APPROVED, REJECTED
+  rejectedReason String?
+
+  // Relasi
+  approvedById  String?
+  approvedBy    Admin?    @relation("ApprovedBy", fields: [approvedById], references: [id])
+  approvedAt    DateTime?
+  user          User?     // dibuat setelah approve
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([status])
+  @@index([phone])
+}
+
+// ============================================================
+// INVOICE (TAGIHAN)
+// ============================================================
+
+model Invoice {
+  id              String        @id @default(cuid())
+  invoiceNumber   String        @unique  // INV-2024-001
+  userId          String
+  user            User          @relation(fields: [userId], references: [id])
+  packageId       String
+  package         Package       @relation(fields: [packageId], references: [id])
+  amount          Int           // nominal tagihan
+  penaltyAmount   Int           @default(0)  // denda keterlambatan
+  totalAmount     Int           // amount + penalty
+  billingMonth    Int           // bulan (1-12)
+  billingYear     Int           // tahun
+  dueDate         DateTime      // tanggal jatuh tempo
+  status          InvoiceStatus @default(UNPAID)
+  paidAt          DateTime?
+  notes           String?
+
+  // Admin yang generate
+  generatedById   String?
+  generatedBy     Admin?        @relation("GeneratedBy", fields: [generatedById], references: [id])
+
+  // Relasi
+  payments        Payment[]
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([userId, billingMonth, billingYear])  // 1 tagihan per bulan per user
+  @@index([userId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([billingMonth, billingYear])
+}
+
+// ============================================================
+// PEMBAYARAN
+// ============================================================
+
+model Payment {
+  id              String          @id @default(cuid())
+  paymentCode     String          @unique  // PAY-2024-001
+  invoiceId       String
+  invoice         Invoice         @relation(fields: [invoiceId], references: [id])
+  userId          String
+  user            User            @relation(fields: [userId], references: [id])
+  amount          Int
+  method          PaymentMethod
+  status          PaymentStatus   @default(PENDING)
+  proofImageUrl   String?         // URL bukti transfer
+  gatewayRef      String?         // referensi payment gateway
+  gatewayData     Json?           // data lengkap dari gateway
+  notes           String?         // catatan dari user
+  rejectedReason  String?         // alasan ditolak admin
+
+  // Admin yang proses
+  processedById   String?
+  processedBy     Admin?          @relation("ProcessedBy", fields: [processedById], references: [id])
+  processedAt     DateTime?
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([invoiceId])
+  @@index([userId])
+  @@index([status])
+}
+
+// ============================================================
+// TIKET SUPPORT
+// ============================================================
+
+model Ticket {
+  id            String          @id @default(cuid())
+  ticketNumber  String          @unique  // TKT-2024-001
+  userId        String
+  user          User            @relation(fields: [userId], references: [id])
+  title         String
+  description   String
+  category      String          // "internet-mati", "lambat", "billing", "lainnya"
+  priority      TicketPriority  @default(MEDIUM)
+  status        TicketStatus    @default(OPEN)
+  attachmentUrl String?         // foto/screenshot masalah
+  resolvedAt    DateTime?
+
+  // Relasi
+  replies       TicketReply[]
+
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([priority])
+}
+
+model TicketReply {
+  id          String    @id @default(cuid())
+  ticketId    String
+  ticket      Ticket    @relation(fields: [ticketId], references: [id])
+  message     String
+  isFromAdmin Boolean   @default(false)
+  attachmentUrl String?
+
+  // Admin yang balas (nullable jika dari user)
+  adminId     String?
+  admin       Admin?    @relation("RepliedBy", fields: [adminId], references: [id])
+
+  createdAt   DateTime  @default(now())
+
+  @@index([ticketId])
+}
+
+// ============================================================
+// OTP CODE
+// ============================================================
+
+model OtpCode {
+  id          String    @id @default(cuid())
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id])
+  phone       String?   // untuk OTP saat belum punya akun
+  email       String?
+  code        String    // 6 digit
+  isUsed      Boolean   @default(false)
+  attempts    Int       @default(0)   // berapa kali salah input
+  expiresAt   DateTime
+  ipAddress   String?
+
+  createdAt   DateTime  @default(now())
+
+  @@index([email])
+  @@index([phone])
+  @@index([code])
+}
+
+// ============================================================
+// NOTIFIKASI
+// ============================================================
+
+model Notification {
+  id          String              @id @default(cuid())
+  userId      String
+  user        User                @relation(fields: [userId], references: [id])
+  type        NotificationType
+  channel     NotificationChannel @default(EMAIL)
+  title       String
+  message     String
+  isRead      Boolean             @default(false)
+  isSent      Boolean             @default(false)
+  sentAt      DateTime?
+  readAt      DateTime?
+  metadata    Json?               // data tambahan (invoiceId, dll)
+
+  createdAt   DateTime            @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([type])
+}
+
+// ============================================================
+// LOGIN LOG (KEAMANAN)
+// ============================================================
+
+model LoginLog {
+  id          String    @id @default(cuid())
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id])
+  adminId     String?
+  admin       Admin?    @relation(fields: [adminId], references: [id])
+  ipAddress   String
+  userAgent   String?
+  isSuccess   Boolean
+  failReason  String?   // "wrong_otp", "wrong_password", "expired"
+  loginAt     DateTime  @default(now())
+
+  @@index([userId])
+  @@index([adminId])
+  @@index([loginAt])
+}
+
+// ============================================================
+// SYSTEM SETTINGS
+// ============================================================
+
+model Setting {
+  id          String    @id @default(cuid())
+  key         String    @unique
+  value       String
+  description String?
+  updatedAt   DateTime  @updatedAt
+
+  // Contoh key yang digunakan:
+  // "billing_due_days"     → "10" (jatuh tempo H+10)
+  // "penalty_amount"       → "10000" (denda Rp10.000)
+  // "otp_expiry_minutes"   → "5"
+  // "company_name"         → "AqraPana Network"
+  // "company_phone"        → "08xxxxxxxxxx"
+  // "company_address"      → "Jl. ..."
+  // "company_logo_url"     → "https://..."
+  // "wa_gateway_url"       → "https://..."
+  // "wa_gateway_token"     → "xxx"
 }
