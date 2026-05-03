@@ -24,4 +24,23 @@ export class NotificationsService {
       `,
     })
   }
+
+  async sendActivationEmail(email: string, name: string, activationLink: string) {
+  await this.transporter.sendMail({
+    from: `"WiFi Management" <${process.env.GMAIL_USER}>`,
+    to: email,
+    subject: 'Aktifkan Akun WiFi Kamu',
+    html: `
+      <h2>Halo ${name}! 🎉</h2>
+      <p>Pendaftaran kamu telah disetujui!</p>
+      <p>Klik tombol di bawah untuk mengaktifkan akun dan membuat password:</p>
+      <a href="${activationLink}" 
+         style="background:#2563eb;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;margin:16px 0">
+        Aktifkan Akun
+      </a>
+      <p>Link berlaku <strong>7 hari</strong>.</p>
+      <p>Jika kamu tidak merasa mendaftar, abaikan email ini.</p>
+    `,
+  })
+}
 }
