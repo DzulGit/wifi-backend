@@ -17,6 +17,11 @@ export class AuthService {
     private notifications: NotificationsService,
   ) {}
 
+  private excludePassword(user: any) {
+  const { password, activationToken, activationExpiry, ...safe } = user
+  return safe
+}
+
   // ── Generate 6 digit OTP ──────────────────────────────────
   private generateOtp(): string {
     return Math.floor(100000 + Math.random() * 900000).toString()
@@ -83,10 +88,10 @@ export class AuthService {
     })
 
     const user = await this.prisma.user.findFirst({ where: { email } })
-if (!user) throw new UnauthorizedException('User tidak ditemukan')  // tambah baris ini
-const token = this.jwt.sign({ sub: user.id, type: 'user' })
+    if (!user) throw new UnauthorizedException('User tidak ditemukan')
+    const token = this.jwt.sign({ sub: user.id, type: 'user' })
 
-    return { token, user }
+    return { token, user: this.excludePassword(user) }
   }
 
   // ── Login dengan password ─────────────────────────────────
@@ -105,22 +110,25 @@ const token = this.jwt.sign({ sub: user.id, type: 'user' })
     if (!isMatch) throw new UnauthorizedException('Email atau password salah')
 
     const token = this.jwt.sign({ sub: user.id, type: 'user' })
-    return { token, user }
+    return { token, user: this.excludePassword(user) }
   }
 
   // ── Login admin ───────────────────────────────────────────
   async loginAdmin(email: string, password: string) {
-    const admin = await this.prisma.admin.findUnique({ where: { email } })
-    if (!admin || !admin.isActive) {
-      throw new UnauthorizedException('Email atau password salah')
-    }
-
-    const isMatch = await bcrypt.compare(password, admin.password)
-    if (!isMatch) throw new UnauthorizedException('Email atau password salah')
-
-    const token = this.jwt.sign({ sub: admin.id, type: 'admin' })
-    return { token, admin }
+  const admin = await this.prisma.admin.findUnique({ where: { email } })
+  if (!admin || !admin.isActive) {
+    throw new UnauthorizedException('Email atau password salah')
   }
+
+  const isMatch = await bcrypt.compare(password, admin.password)
+  if (!isMatch) throw new UnauthorizedException('Email atau password salah')
+
+  const token = this.jwt.sign({ sub: admin.id, type: 'admin' })
+  
+  // rename jadi adminPassword biar tidak bentrok
+  const { password: adminPassword, ...safeAdmin } = admin
+  return { token, admin: safeAdmin }
+}
 
   // ── Aktivasi akun ─────────────────────────────────────────
   async activateAccount(token: string, password: string) {
