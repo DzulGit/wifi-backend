@@ -43,4 +43,46 @@ export class NotificationsService {
     `,
   })
 }
+async sendInvoiceEmail(
+  email: string,
+  name: string,
+  invoiceNumber: string,
+  amount: number,
+  dueDate: Date,
+) {
+  const formattedAmount = new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+  }).format(amount)
+
+  const formattedDate = new Intl.DateTimeFormat('id-ID', {
+    dateStyle: 'long',
+  }).format(dueDate)
+
+  await this.transporter.sendMail({
+    from: `"WiFi Management" <${process.env.GMAIL_USER}>`,
+    to: email,
+    subject: `Tagihan WiFi ${invoiceNumber}`,
+    html: `
+      <h2>Halo ${name}!</h2>
+      <p>Tagihan WiFi bulan ini sudah tersedia.</p>
+      <table style="border-collapse:collapse;width:100%;max-width:400px">
+        <tr>
+          <td style="padding:8px;border:1px solid #e5e7eb">Nomor Invoice</td>
+          <td style="padding:8px;border:1px solid #e5e7eb"><strong>${invoiceNumber}</strong></td>
+        </tr>
+        <tr>
+          <td style="padding:8px;border:1px solid #e5e7eb">Total Tagihan</td>
+          <td style="padding:8px;border:1px solid #e5e7eb"><strong>${formattedAmount}</strong></td>
+        </tr>
+        <tr>
+          <td style="padding:8px;border:1px solid #e5e7eb">Jatuh Tempo</td>
+          <td style="padding:8px;border:1px solid #e5e7eb"><strong>${formattedDate}</strong></td>
+        </tr>
+      </table>
+      <p style="margin-top:16px">Segera lakukan pembayaran sebelum jatuh tempo untuk menghindari denda.</p>
+    `,
+  })
+}
+
 }
