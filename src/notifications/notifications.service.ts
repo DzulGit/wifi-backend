@@ -85,4 +85,37 @@ async sendInvoiceEmail(
   })
 }
 
+async sendPaymentConfirmationEmail(
+  email: string,
+  name: string,
+  paymentCode: string,
+  amount: number,
+) {
+  const formattedAmount = new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+  }).format(amount)
+
+  await this.transporter.sendMail({
+    from: `"WiFi Management" <${process.env.GMAIL_USER}>`,
+    to: email,
+    subject: `Pembayaran ${paymentCode} Berhasil`,
+    html: `
+      <h2>Halo ${name}! 🎉</h2>
+      <p>Pembayaran kamu telah dikonfirmasi!</p>
+      <table style="border-collapse:collapse;width:100%;max-width:400px">
+        <tr>
+          <td style="padding:8px;border:1px solid #e5e7eb">Kode Pembayaran</td>
+          <td style="padding:8px;border:1px solid #e5e7eb"><strong>${paymentCode}</strong></td>
+        </tr>
+        <tr>
+          <td style="padding:8px;border:1px solid #e5e7eb">Jumlah</td>
+          <td style="padding:8px;border:1px solid #e5e7eb"><strong>${formattedAmount}</strong></td>
+        </tr>
+      </table>
+      <p style="margin-top:16px;color:#16a34a">✅ Internet kamu sudah aktif kembali!</p>
+    `,
+  })
+}
+
 }
