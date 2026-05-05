@@ -2,10 +2,10 @@ import { Controller, Post, Body, Get, UseGuards, Request } from '@nestjs/common'
 import { AuthService } from './auth.service'
 import { AuthGuard } from '@nestjs/passport'
 
-class SendOtpDto { email: string }
-class VerifyOtpDto { email: string; code: string }
-class LoginDto { email: string; password: string }
-class ActivateDto { token: string; password: string }
+class SendOtpDto { email!: string }
+class VerifyOtpDto { email!: string; code!: string }
+class LoginDto { email!: string; password!: string }
+class ActivateDto { token!: string; password!: string }
 
 @Controller('auth')
 export class AuthController {
