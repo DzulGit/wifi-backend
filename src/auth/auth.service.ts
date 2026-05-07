@@ -95,37 +95,124 @@ export class AuthService {
   }
 
   // ── Login dengan password ─────────────────────────────────
-  async loginWithPassword(email: string, password: string) {
-    const user = await this.prisma.user.findFirst({
-      where: { email },
-    })
-    if (!user || !user.password) {
-      throw new UnauthorizedException('Email atau password salah')
-    }
-    if (user.status === 'INACTIVE') {
-      throw new UnauthorizedException('Akun tidak aktif')
-    }
+async loginWithPassword(email: string, password: string, ip?: string) {
+  const user = await this.prisma.user.findFirst({ where: { email } })
 
-    const isMatch = await bcrypt.compare(password, user.password)
-    if (!isMatch) throw new UnauthorizedException('Email atau password salah')
+  // Log attempt — catat dulu sebelum validasi
+  await this.prisma.loginLog.create({
+    data: {
+      userId: user?.id ?? null,
+      ipAddress: ip ?? 'unknown',
+      isSuccess: false, // update nanti kalau berhasil
+      failReason: !user ? 'user_not_found' : 'pending',
+    }
+  }).catch(() => {}) // jangan crash kalau log gagal
 
-    const token = this.jwt.sign({ sub: user.id, type: 'user' })
-    return { token, user: this.excludePassword(user) }
+  if (!user || !user.password) {
+    throw new UnauthorizedException('Email atau password salah')
+  }
+  if (user.status === 'INACTIVE') {
+    throw new UnauthorizedException('Akun tidak aktif')
   }
 
-  // ── Login admin ───────────────────────────────────────────
-  async loginAdmin(email: string, password: string) {
-  const admin = await this.prisma.admin.findUnique({ where: { email } })
-  if (!admin || !admin.isActive) {
+  // Cek apakah akun terkunci (5 gagal dalam 15 menit)
+  const recentFails = await this.prisma.loginLog.count({
+    where: {
+      userId: user.id,
+      isSuccess: false,
+      failReason: { not: 'pending' },
+      loginAt: { gte: new Date(Date.now() - 15 * 60 * 1000) }
+    }
+  })
+
+  if (recentFails >= 5) {
+    throw new UnauthorizedException('Akun terkunci sementara karena terlalu banyak percobaan gagal. Coba lagi dalam 15 menit.')
+  }
+
+  const isMatch = await bcrypt.compare(password, user.password)
+
+  if (!isMatch) {
+    // Update log dengan alasan yang benar
+    await this.prisma.loginLog.updateMany({
+      where: { userId: user.id, failReason: 'pending' },
+      data: { failReason: 'wrong_password' }
+    }).catch(() => {})
     throw new UnauthorizedException('Email atau password salah')
   }
 
+  // Login sukses — catat sukses
+  await this.prisma.loginLog.create({
+    data: {
+      userId: user.id,
+      ipAddress: ip ?? 'unknown',
+      isSuccess: true,
+    }
+  }).catch(() => {})
+
+  const token = this.jwt.sign({ sub: user.id, type: 'user' })
+  return { token, user: this.excludePassword(user) }
+}
+
+// ── Login admin ───────────────────────────────────────────
+async loginAdmin(email: string, password: string, ip?: string) {
+  const admin = await this.prisma.admin.findUnique({ where: { email } })
+
+  if (!admin || !admin.isActive) {
+    // Log gagal tanpa expose info admin
+    await this.prisma.loginLog.create({
+      data: {
+        adminId: admin?.id ?? null,
+        ipAddress: ip ?? 'unknown',
+        isSuccess: false,
+        failReason: 'invalid_credentials',
+      }
+    }).catch(() => {})
+    throw new UnauthorizedException('Email atau password salah')
+  }
+
+  // Cek lockout admin — lebih ketat: 3 gagal dalam 15 menit
+  const recentFails = await this.prisma.loginLog.count({
+    where: {
+      adminId: admin.id,
+      isSuccess: false,
+      loginAt: { gte: new Date(Date.now() - 15 * 60 * 1000) }
+    }
+  })
+
+  if (recentFails >= 3) {
+    throw new UnauthorizedException('Akun admin terkunci sementara. Coba lagi dalam 15 menit.')
+  }
+
   const isMatch = await bcrypt.compare(password, admin.password)
-  if (!isMatch) throw new UnauthorizedException('Email atau password salah')
+
+  if (!isMatch) {
+    await this.prisma.loginLog.create({
+      data: {
+        adminId: admin.id,
+        ipAddress: ip ?? 'unknown',
+        isSuccess: false,
+        failReason: 'wrong_password',
+      }
+    }).catch(() => {})
+    throw new UnauthorizedException('Email atau password salah')
+  }
+
+  // Sukses
+  await this.prisma.loginLog.create({
+    data: {
+      adminId: admin.id,
+      ipAddress: ip ?? 'unknown',
+      isSuccess: true,
+    }
+  }).catch(() => {})
+
+  // Update lastLoginAt
+  await this.prisma.admin.update({
+    where: { id: admin.id },
+    data: { lastLoginAt: new Date() }
+  })
 
   const token = this.jwt.sign({ sub: admin.id, type: 'admin' })
-  
-  // rename jadi adminPassword biar tidak bentrok
   const { password: adminPassword, ...safeAdmin } = admin
   return { token, admin: safeAdmin }
 }

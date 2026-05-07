@@ -1,6 +1,8 @@
 import { Controller, Post, Body, Get, UseGuards, Request } from '@nestjs/common'
-import { AuthService } from './auth.service'
 import { AuthGuard } from '@nestjs/passport'
+import { Throttle, SkipThrottle } from '@nestjs/throttler'
+import { AuthService } from './auth.service'
+import { LoginThrottleGuard } from './guards/login-throttle.guard'
 
 class SendOtpDto { email!: string }
 class VerifyOtpDto { email!: string; code!: string }
@@ -11,34 +13,46 @@ class ActivateDto { token!: string; password!: string }
 export class AuthController {
   constructor(private authService: AuthService) {}
 
+  // Max 5 percobaan per 15 menit per IP+email
+  @UseGuards(LoginThrottleGuard)
+  @Throttle({ default: { limit: 5, ttl: 900000 } })
   @Post('send-otp')
   sendOtp(@Body() body: SendOtpDto) {
     return this.authService.sendOtp(body.email)
   }
 
+  @UseGuards(LoginThrottleGuard)
+  @Throttle({ default: { limit: 5, ttl: 900000 } })
   @Post('verify-otp')
   verifyOtp(@Body() body: VerifyOtpDto) {
     return this.authService.verifyOtp(body.email, body.code)
   }
 
+  @UseGuards(LoginThrottleGuard)
+  @Throttle({ default: { limit: 5, ttl: 900000 } })
   @Post('login')
-  login(@Body() body: LoginDto) {
-    return this.authService.loginWithPassword(body.email, body.password)
+  login(@Request() req: any, @Body() body: LoginDto) {
+    return this.authService.loginWithPassword(body.email, body.password, req.ip)
   }
 
+  // Admin login — lebih ketat: 3 percobaan per 15 menit
+  @UseGuards(LoginThrottleGuard)
+  @Throttle({ default: { limit: 3, ttl: 900000 } })
   @Post('admin/login')
-  loginAdmin(@Body() body: LoginDto) {
-    return this.authService.loginAdmin(body.email, body.password)
+  loginAdmin(@Request() req: any, @Body() body: LoginDto) {
+    return this.authService.loginAdmin(body.email, body.password, req.ip)
   }
 
+  @SkipThrottle()
   @Post('activate')
   activate(@Body() body: ActivateDto) {
     return this.authService.activateAccount(body.token, body.password)
   }
 
+  @SkipThrottle()
   @UseGuards(AuthGuard('jwt'))
   @Get('me')
-  getMe(@Request() req) {
+  getMe(@Request() req: any) {
     return req.user
   }
 }
