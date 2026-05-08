@@ -89,17 +89,21 @@ export class BillingService {
     const results = { success: 0, skipped: 0, errors: [] as string[] }
 
     for (const user of activeUsers) {
-      try {
-        await this.generateInvoice(user.id, adminId, month, year)
-        results.success++
-      } catch (e) {
-        if (e.message.includes('sudah dibuat')) {
-          results.skipped++
-        } else {
-          results.errors.push(`${user.customerCode}: ${e.message}`)
-        }
+  try {
+    await this.generateInvoice(user.id, adminId, month, year)
+    results.success++
+  } catch (e) {
+    if (e instanceof Error) {
+      if (e.message.includes('sudah dibuat')) {
+        results.skipped++
+      } else {
+        results.errors.push(`${user.customerCode}: ${e.message}`)
       }
+    } else {
+      results.errors.push(`${user.customerCode}: Unknown error`)
     }
+  }
+}
 
     return {
       message: `Generate selesai: ${results.success} berhasil, ${results.skipped} dilewati`,
