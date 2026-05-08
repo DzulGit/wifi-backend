@@ -18,7 +18,7 @@ import { TicketsModule } from './tickets/tickets.module'
       {
         name: 'short',
         ttl: 60000,      // 1 menit
-        limit: 101,       // max 10 request per menit
+        limit: 100,       // max 10 request per menit
       },
       {
         name: 'medium',
