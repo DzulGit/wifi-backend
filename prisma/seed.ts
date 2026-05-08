@@ -92,7 +92,7 @@ async function main() {
     update: {},
     create: {
       fullName: 'Budi Santoso',
-      email: 'budi@gmail.com',
+      email: 'budisulistiyokds@gmail.com',
       phone: '081234567890',
       address: 'Jl. Merdeka No. 1, Samarinda',
       city: 'Samarinda',
@@ -127,7 +127,7 @@ async function main() {
   console.log('\n🎉 Seeding selesai!')
   console.log('─────────────────────────────')
   console.log('Admin  → admin@wifiapp.com / admin123')
-  console.log('User   → budi@gmail.com / user123')
+  console.log('User   → budisulistiyokds@gmail.com / user123')
   console.log('─────────────────────────────')
 }
 
