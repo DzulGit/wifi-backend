@@ -18,12 +18,12 @@ import { TicketsModule } from './tickets/tickets.module'
       {
         name: 'short',
         ttl: 60000,      // 1 menit
-        limit: 10,       // max 10 request per menit
+        limit: 101,       // max 10 request per menit
       },
       {
         name: 'medium',
         ttl: 900000,     // 15 menit
-        limit: 30,       // max 30 request per 15 menit
+        limit: 300,       // max 30 request per 15 menit
       },
     ]),
     PrismaModule,
