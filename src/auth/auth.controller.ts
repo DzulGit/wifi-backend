@@ -1,8 +1,9 @@
-import { Controller, Post, Body, Get, UseGuards, Request } from '@nestjs/common'
+// TAMBAHKAN BadRequestException DI SINI
+import { Controller, Post, Body, Get, UseGuards, Request, Patch, BadRequestException } from '@nestjs/common'
 import { AuthGuard } from '@nestjs/passport'
 import { Throttle, SkipThrottle } from '@nestjs/throttler'
 import { AuthService } from './auth.service'
-import { LoginThrottleGuard } from './guards/login-throttle.guard'
+import { LoginThrottleGuard } from './guards/login-throttle.guard'  
 
 class SendOtpDto { email!: string }
 class VerifyOtpDto { email!: string; code!: string }
@@ -12,6 +13,7 @@ class ActivateDto { token!: string; password!: string }
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
+  
   // Login endpoints tetap dibatasi
   @UseGuards(LoginThrottleGuard)
   @Throttle({ default: { limit: 5, ttl: 900000 } })
@@ -51,5 +53,23 @@ export class AuthController {
   @Get('me')
   getMe(@Request() req: any) {
     return req.user
+  }
+
+  @UseGuards(AuthGuard('jwt')) // Wajib login dulu
+  @Patch('change-password')
+  async changePassword(
+    @Request() req: any,
+    @Body() body: any,
+  ) {
+    if (!body.oldPassword || !body.newPassword) {
+      throw new BadRequestException('oldPassword dan newPassword wajib diisi');
+    }
+
+    // req.user.id didapat otomatis dari AuthGuard (token JWT)
+    return this.authService.changePassword(
+      req.user.id, 
+      body.oldPassword, 
+      body.newPassword
+    );
   }
 }

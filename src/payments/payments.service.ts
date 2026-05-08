@@ -146,6 +146,11 @@ export class PaymentsService {
       data: { status: 'UNPAID' },
     })
 
+    await this.prisma.invoice.update({
+      where: { id: payment.invoiceId },
+      data: { status: 'UNPAID' },
+    })
+
     return { message: 'Pembayaran ditolak, tagihan dikembalikan ke unpaid' }
   }
 
