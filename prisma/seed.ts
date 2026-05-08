@@ -127,7 +127,7 @@ async function main() {
   console.log('\n🎉 Seeding selesai!')
   console.log('─────────────────────────────')
   console.log('Admin  → admin@wifiapp.com / admin123')
-  console.log('User   → budi@gmail.com / user123')
+  console.log('User   → budisulistiyokds@gmail.com / user123')
   console.log('─────────────────────────────')
 }
 
