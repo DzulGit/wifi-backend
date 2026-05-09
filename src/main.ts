@@ -6,8 +6,8 @@ async function bootstrap() {
 
   app.enableCors({
     origin: [
-      process.env.FRONTEND_URL ?? 'http://localhost:3000',
-      'http://localhost:3000',
+      process.env.FRONTEND_URL ?? 'https://wifi-frontend-978253671723.asia-southeast2.run.app/',
+      'https://wifi-frontend-978253671723.asia-southeast2.run.app/',
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
