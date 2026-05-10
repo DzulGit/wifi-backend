@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { NotificationsService } from '../notifications/notifications.service'
 import { randomBytes } from 'crypto'
@@ -10,7 +14,7 @@ export class RegistrationsService {
     private notifications: NotificationsService,
   ) {}
 
-  // ── Submit pendaftaran (dari landing page) ────────────────
+  // ── Submit pendaftaran (dari landing page — public endpoint) ──────────────
   async submit(data: {
     fullName: string
     phone: string
@@ -23,7 +27,25 @@ export class RegistrationsService {
     latitude?: number
     longitude?: number
   }) {
-    // Cek paket ada
+    // SECURITY FIX: Validasi koordinat jika disertakan
+    if (data.latitude !== undefined || data.longitude !== undefined) {
+      if (
+        typeof data.latitude !== 'number' ||
+        typeof data.longitude !== 'number' ||
+        data.latitude < -90 ||
+        data.latitude > 90 ||
+        data.longitude < -180 ||
+        data.longitude > 180
+      ) {
+        throw new BadRequestException('Koordinat lokasi tidak valid')
+      }
+    }
+
+    // SECURITY FIX: Batasi panjang notes agar tidak bisa dipakai untuk injection
+    if (data.notes && data.notes.length > 500) {
+      throw new BadRequestException('Catatan maksimal 500 karakter')
+    }
+
     const pkg = await this.prisma.package.findUnique({
       where: { id: data.packageId },
     })
@@ -56,7 +78,7 @@ export class RegistrationsService {
     }
   }
 
-  // ── Get all registrations (admin) ─────────────────────────
+  // ── Get all registrations (admin) ─────────────────────────────────────────
   async findAll(query: {
     status?: string
     search?: string
@@ -65,6 +87,9 @@ export class RegistrationsService {
   }) {
     const { status, search, page = 1, limit = 10 } = query
     const skip = (page - 1) * limit
+
+    // SECURITY FIX: Batasi limit maksimum
+    const safeLimit = Math.min(limit, 100)
 
     const where: any = {}
     if (status) where.status = status
@@ -80,7 +105,7 @@ export class RegistrationsService {
       this.prisma.registration.findMany({
         where,
         skip,
-        take: limit,
+        take: safeLimit,
         orderBy: { createdAt: 'desc' },
         include: {
           approvedBy: {
@@ -93,11 +118,11 @@ export class RegistrationsService {
 
     return {
       data,
-      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+      meta: { total, page, limit: safeLimit, totalPages: Math.ceil(total / safeLimit) },
     }
   }
 
-  // ── Get one registration ──────────────────────────────────
+  // ── Get one registration ──────────────────────────────────────────────────
   async findOne(id: string) {
     const reg = await this.prisma.registration.findUnique({
       where: { id },
@@ -110,7 +135,7 @@ export class RegistrationsService {
     return reg
   }
 
-  // ── Approve pendaftaran ───────────────────────────────────
+  // ── Approve pendaftaran ───────────────────────────────────────────────────
   async approve(id: string, adminId: string) {
     const reg = await this.prisma.registration.findUnique({
       where: { id },
@@ -121,15 +146,13 @@ export class RegistrationsService {
       throw new BadRequestException('Pendaftaran sudah diproses sebelumnya')
     }
 
-    // Generate customer code
     const count = await this.prisma.user.count()
     const customerCode = `WIFI-${String(count + 1).padStart(5, '0')}`
 
-    // Generate activation token
+    // SECURITY FIX: Gunakan randomBytes(32) — sudah benar; panjang 64 hex chars
     const activationToken = randomBytes(32).toString('hex')
-    const activationExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    const activationExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 hari
 
-    // Buat akun user
     const user = await this.prisma.user.create({
       data: {
         fullName: reg.fullName,
@@ -147,7 +170,6 @@ export class RegistrationsService {
       },
     })
 
-    // Update status registration
     await this.prisma.registration.update({
       where: { id },
       data: {
@@ -157,14 +179,14 @@ export class RegistrationsService {
       },
     })
 
-    // Kirim link aktivasi via email (kalau ada email)
     if (reg.email) {
-      const activationLink = `${process.env.FRONTEND_URL}/activate?token=${activationToken}`
-      await this.notifications.sendActivationEmail(
-        reg.email,
-        reg.fullName,
-        activationLink,
-      )
+      // SECURITY FIX: Validasi FRONTEND_URL ada sebelum membentuk link
+      const frontendUrl = process.env.FRONTEND_URL
+      if (!frontendUrl) {
+        throw new Error('FRONTEND_URL environment variable is not set')
+      }
+      const activationLink = `${frontendUrl}/activate?token=${activationToken}`
+      await this.notifications.sendActivationEmail(reg.email, reg.fullName, activationLink)
     }
 
     return {
@@ -173,8 +195,12 @@ export class RegistrationsService {
     }
   }
 
-  // ── Reject pendaftaran ────────────────────────────────────
+  // ── Reject pendaftaran ────────────────────────────────────────────────────
   async reject(id: string, adminId: string, reason: string) {
+    if (!reason || reason.trim().length === 0) {
+      throw new BadRequestException('Alasan penolakan wajib diisi')
+    }
+
     const reg = await this.prisma.registration.findUnique({ where: { id } })
     if (!reg) throw new NotFoundException('Pendaftaran tidak ditemukan')
     if (reg.status !== 'PENDING') {
@@ -187,14 +213,14 @@ export class RegistrationsService {
         status: 'REJECTED',
         approvedById: adminId,
         approvedAt: new Date(),
-        rejectedReason: reason,
+        rejectedReason: reason.trim(),
       },
     })
 
     return { message: 'Pendaftaran ditolak' }
   }
 
-  // ── Stats untuk dashboard admin ───────────────────────────
+  // ── Stats untuk dashboard admin ───────────────────────────────────────────
   async getStats() {
     const [total, pending, approved, rejected] = await Promise.all([
       this.prisma.registration.count(),
