@@ -6,15 +6,15 @@ export class PackagesService {
   constructor(private prisma: PrismaService) {}
 
   // ── Get all packages ──────────────────────────────────────
-  async findAll(onlyActive = false) {
-    return this.prisma.package.findMany({
-      where: onlyActive ? { isActive: true } : {},
-      orderBy: { sortOrder: 'asc' },
-      include: {
-        _count: { select: { users: true } }, // berapa user pakai paket ini
-      },
-    })
-  }
+  async findAll(onlyActive = true) {  // ← default true
+  return this.prisma.package.findMany({
+    where: onlyActive ? { isActive: true } : {},
+    orderBy: { sortOrder: 'asc' },
+    include: {
+      _count: { select: { users: true } },
+    },
+  })
+}
 
   // ── Get one package ───────────────────────────────────────
   async findOne(id: string) {

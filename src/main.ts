@@ -1,20 +1,22 @@
 import { NestFactory } from '@nestjs/core'
 import { AppModule } from './app.module'
+import { NestExpressApplication } from '@nestjs/platform-express'
+import { join } from 'path'
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule)
+  const app = await NestFactory.create<NestExpressApplication>(AppModule) // ← fix generic type
 
   app.enableCors({
     origin: [
-      process.env.FRONTEND_URL ?? 'http://localhost:3000',
-      'http://localhost:3000',
+      process.env.FRONTEND_URL ?? 'https://wifi-frontend-978253671723.asia-southeast2.run.app/',
+      'https://wifi-frontend-978253671723.asia-southeast2.run.app/',
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 
-  // Security headers
+
   app.use((req: any, res: any, next: any) => {
     res.setHeader('X-Content-Type-Options', 'nosniff')
     res.setHeader('X-Frame-Options', 'DENY')

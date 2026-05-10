@@ -1,8 +1,9 @@
-import { Controller, Post, Body, Get, UseGuards, Request } from '@nestjs/common'
+// TAMBAHKAN BadRequestException DI SINI
+import { Controller, Post, Body, Get, UseGuards, Request, Patch, BadRequestException } from '@nestjs/common'
 import { AuthGuard } from '@nestjs/passport'
 import { Throttle, SkipThrottle } from '@nestjs/throttler'
 import { AuthService } from './auth.service'
-import { LoginThrottleGuard } from './guards/login-throttle.guard'
+import { LoginThrottleGuard } from './guards/login-throttle.guard'  
 
 class SendOtpDto { email!: string }
 class VerifyOtpDto { email!: string; code!: string }
@@ -12,22 +13,8 @@ class ActivateDto { token!: string; password!: string }
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
-
-  // Max 5 percobaan per 15 menit per IP+email
-  @UseGuards(LoginThrottleGuard)
-  @Throttle({ default: { limit: 5, ttl: 900000 } })
-  @Post('send-otp')
-  sendOtp(@Body() body: SendOtpDto) {
-    return this.authService.sendOtp(body.email)
-  }
-
-  @UseGuards(LoginThrottleGuard)
-  @Throttle({ default: { limit: 5, ttl: 900000 } })
-  @Post('verify-otp')
-  verifyOtp(@Body() body: VerifyOtpDto) {
-    return this.authService.verifyOtp(body.email, body.code)
-  }
-
+  
+  // Login endpoints tetap dibatasi
   @UseGuards(LoginThrottleGuard)
   @Throttle({ default: { limit: 5, ttl: 900000 } })
   @Post('login')
@@ -35,12 +22,24 @@ export class AuthController {
     return this.authService.loginWithPassword(body.email, body.password, req.ip)
   }
 
-  // Admin login — lebih ketat: 3 percobaan per 15 menit
   @UseGuards(LoginThrottleGuard)
   @Throttle({ default: { limit: 3, ttl: 900000 } })
   @Post('admin/login')
   loginAdmin(@Request() req: any, @Body() body: LoginDto) {
     return this.authService.loginAdmin(body.email, body.password, req.ip)
+  }
+
+  // Semua endpoint lain skip throttle
+  @SkipThrottle()
+  @Post('send-otp')
+  sendOtp(@Body() body: SendOtpDto) {
+    return this.authService.sendOtp(body.email)
+  }
+
+  @SkipThrottle()
+  @Post('verify-otp')
+  verifyOtp(@Body() body: VerifyOtpDto) {
+    return this.authService.verifyOtp(body.email, body.code)
   }
 
   @SkipThrottle()
@@ -54,5 +53,23 @@ export class AuthController {
   @Get('me')
   getMe(@Request() req: any) {
     return req.user
+  }
+
+  @UseGuards(AuthGuard('jwt')) // Wajib login dulu
+  @Patch('change-password')
+  async changePassword(
+    @Request() req: any,
+    @Body() body: any,
+  ) {
+    if (!body.oldPassword || !body.newPassword) {
+      throw new BadRequestException('oldPassword dan newPassword wajib diisi');
+    }
+
+    // req.user.id didapat otomatis dari AuthGuard (token JWT)
+    return this.authService.changePassword(
+      req.user.id, 
+      body.oldPassword, 
+      body.newPassword
+    );
   }
 }

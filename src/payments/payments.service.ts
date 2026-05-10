@@ -146,6 +146,11 @@ export class PaymentsService {
       data: { status: 'UNPAID' },
     })
 
+    await this.prisma.invoice.update({
+      where: { id: payment.invoiceId },
+      data: { status: 'UNPAID' },
+    })
+
     return { message: 'Pembayaran ditolak, tagihan dikembalikan ke unpaid' }
   }
 
@@ -200,11 +205,32 @@ export class PaymentsService {
 
   // ── Stats pembayaran ──────────────────────────────────────
   async getStats() {
-    const [pending, approved, rejected] = await Promise.all([
-      this.prisma.payment.count({ where: { status: 'PENDING' } }),
-      this.prisma.payment.count({ where: { status: 'APPROVED' } }),
-      this.prisma.payment.count({ where: { status: 'REJECTED' } }),
-    ])
-    return { pending, approved, rejected }
+  const now = new Date()
+  const month = now.getMonth() + 1
+  const year = now.getFullYear()
+
+  const [pending, approved, rejected, totalApproved] = await Promise.all([
+    this.prisma.payment.count({ where: { status: 'PENDING' } }),
+    this.prisma.payment.count({ where: { status: 'APPROVED' } }),
+    this.prisma.payment.count({ where: { status: 'REJECTED' } }),
+    // Tambah ini — total amount yang sudah diapprove bulan ini
+    this.prisma.payment.aggregate({
+      where: {
+        status: 'APPROVED',
+        processedAt: {
+          gte: new Date(year, month - 1, 1),
+          lt: new Date(year, month, 1),
+        },
+      },
+      _sum: { amount: true },
+    }),
+  ])
+
+  return {
+    pending,
+    approved,
+    rejected,
+    totalAmountApproved: totalApproved._sum.amount ?? 0,
   }
+}
 }

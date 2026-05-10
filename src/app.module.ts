@@ -10,6 +10,7 @@ import { RegistrationsModule } from './registrations/registrations.module'
 import { BillingModule } from './billing/billing.module'
 import { PaymentsModule } from './payments/payments.module'
 import { TicketsModule } from './tickets/tickets.module'
+import { AdminNotificationsModule } from './admin-notifications/admin-notifications.module' // ← tambah
 
 @Module({
   imports: [
@@ -17,13 +18,13 @@ import { TicketsModule } from './tickets/tickets.module'
     ThrottlerModule.forRoot([
       {
         name: 'short',
-        ttl: 60000,      // 1 menit
-        limit: 10,       // max 10 request per menit
+        ttl: 60000,
+        limit: 100,
       },
       {
         name: 'medium',
-        ttl: 900000,     // 15 menit
-        limit: 30,       // max 30 request per 15 menit
+        ttl: 900000,
+        limit: 300,
       },
     ]),
     PrismaModule,
@@ -34,11 +35,12 @@ import { TicketsModule } from './tickets/tickets.module'
     BillingModule,
     PaymentsModule,
     TicketsModule,
+    AdminNotificationsModule, // ← tambah
   ],
   providers: [
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard, // Global rate limit semua endpoint
+      useClass: ThrottlerGuard,
     },
   ],
 })
