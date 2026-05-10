@@ -9,7 +9,7 @@ export class PaymentsService {
     private notifications: NotificationsService,
   ) {}
 
-  // ── Generate payment code ─────────────────────────────────
+  // ── Generate payment code ─────────────────────────────────────────────────
   private async generatePaymentCode(): Promise<string> {
     const count = await this.prisma.payment.count()
     const year = new Date().getFullYear()
@@ -17,25 +17,34 @@ export class PaymentsService {
     return `PAY-${year}${month}-${String(count + 1).padStart(4, '0')}`
   }
 
-  // ── Submit pembayaran (oleh user) ─────────────────────────
-  async submit(userId: string, data: {
-    invoiceId: string
-    method: string
-    proofImageUrl?: string
-    notes?: string
-  }) {
+  // ── Submit pembayaran (oleh user) ─────────────────────────────────────────
+  async submit(
+    userId: string,
+    data: {
+      invoiceId: string
+      method: string
+      proofImageUrl?: string
+      notes?: string
+    },
+  ) {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id: data.invoiceId },
       include: { user: true },
     })
+
     if (!invoice) throw new NotFoundException('Tagihan tidak ditemukan')
-    if (invoice.userId !== userId) throw new BadRequestException('Tagihan bukan milik kamu')
+
+    // SECURITY FIX: Pastikan invoice milik user yang sedang login
+    if (invoice.userId !== userId) {
+      throw new BadRequestException('Tagihan bukan milik kamu')
+    }
+
     if (invoice.status === 'PAID') throw new BadRequestException('Tagihan sudah lunas')
 
-    // Cek apakah ada pembayaran pending sebelumnya
     const pendingPayment = await this.prisma.payment.findFirst({
       where: { invoiceId: data.invoiceId, status: 'PENDING' },
     })
+
     if (pendingPayment) {
       throw new BadRequestException('Pembayaran sedang menunggu validasi admin')
     }
@@ -47,7 +56,7 @@ export class PaymentsService {
         paymentCode,
         invoiceId: data.invoiceId,
         userId,
-        amount: invoice.totalAmount,
+        amount: invoice.totalAmount, // Pakai amount dari invoice, bukan dari input user
         method: data.method as any,
         status: 'PENDING',
         proofImageUrl: data.proofImageUrl,
@@ -56,7 +65,6 @@ export class PaymentsService {
       include: { invoice: true },
     })
 
-    // Update status invoice jadi pending
     await this.prisma.invoice.update({
       where: { id: data.invoiceId },
       data: { status: 'PENDING' },
@@ -68,7 +76,7 @@ export class PaymentsService {
     }
   }
 
-  // ── Approve pembayaran (oleh admin) ──────────────────────
+  // ── Approve pembayaran (oleh admin) ──────────────────────────────────────
   async approve(id: string, adminId: string) {
     const payment = await this.prisma.payment.findUnique({
       where: { id },
@@ -77,12 +85,12 @@ export class PaymentsService {
         user: true,
       },
     })
+
     if (!payment) throw new NotFoundException('Pembayaran tidak ditemukan')
     if (payment.status !== 'PENDING') {
       throw new BadRequestException('Pembayaran sudah diproses sebelumnya')
     }
 
-    // Update payment status
     await this.prisma.payment.update({
       where: { id },
       data: {
@@ -92,13 +100,11 @@ export class PaymentsService {
       },
     })
 
-    // Update invoice status jadi PAID
     await this.prisma.invoice.update({
       where: { id: payment.invoiceId },
       data: { status: 'PAID', paidAt: new Date() },
     })
 
-    // Aktifkan user jika suspended karena nunggak
     if (payment.user.status === 'SUSPENDED') {
       await this.prisma.user.update({
         where: { id: payment.userId },
@@ -106,7 +112,6 @@ export class PaymentsService {
       })
     }
 
-    // Kirim notifikasi email
     if (payment.user.email) {
       await this.notifications.sendPaymentConfirmationEmail(
         payment.user.email,
@@ -119,12 +124,17 @@ export class PaymentsService {
     return { message: 'Pembayaran diapprove, tagihan lunas' }
   }
 
-  // ── Reject pembayaran (oleh admin) ────────────────────────
+  // ── Reject pembayaran (oleh admin) ────────────────────────────────────────
   async reject(id: string, adminId: string, reason: string) {
+    if (!reason || reason.trim().length === 0) {
+      throw new BadRequestException('Alasan penolakan wajib diisi')
+    }
+
     const payment = await this.prisma.payment.findUnique({
       where: { id },
       include: { invoice: true },
     })
+
     if (!payment) throw new NotFoundException('Pembayaran tidak ditemukan')
     if (payment.status !== 'PENDING') {
       throw new BadRequestException('Pembayaran sudah diproses sebelumnya')
@@ -136,16 +146,11 @@ export class PaymentsService {
         status: 'REJECTED',
         processedById: adminId,
         processedAt: new Date(),
-        rejectedReason: reason,
+        rejectedReason: reason.trim(),
       },
     })
 
-    // Kembalikan status invoice ke UNPAID
-    await this.prisma.invoice.update({
-      where: { id: payment.invoiceId },
-      data: { status: 'UNPAID' },
-    })
-
+    // BUG FIX: Update invoice hanya sekali (sebelumnya double update)
     await this.prisma.invoice.update({
       where: { id: payment.invoiceId },
       data: { status: 'UNPAID' },
@@ -154,7 +159,7 @@ export class PaymentsService {
     return { message: 'Pembayaran ditolak, tagihan dikembalikan ke unpaid' }
   }
 
-  // ── Get all payments ──────────────────────────────────────
+  // ── Get all payments ──────────────────────────────────────────────────────
   async findAll(query: {
     status?: string
     userId?: string
@@ -164,6 +169,9 @@ export class PaymentsService {
     const { status, userId, page = 1, limit = 10 } = query
     const skip = (page - 1) * limit
 
+    // SECURITY FIX: Batasi limit maksimum
+    const safeLimit = Math.min(limit, 100)
+
     const where: any = {}
     if (status) where.status = status
     if (userId) where.userId = userId
@@ -172,11 +180,13 @@ export class PaymentsService {
       this.prisma.payment.findMany({
         where,
         skip,
-        take: limit,
+        take: safeLimit,
         orderBy: { createdAt: 'desc' },
         include: {
           user: { select: { fullName: true, customerCode: true } },
-          invoice: { select: { invoiceNumber: true, billingMonth: true, billingYear: true } },
+          invoice: {
+            select: { invoiceNumber: true, billingMonth: true, billingYear: true },
+          },
           processedBy: { select: { fullName: true } },
         },
       }),
@@ -185,11 +195,11 @@ export class PaymentsService {
 
     return {
       data,
-      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+      meta: { total, page, limit: safeLimit, totalPages: Math.ceil(total / safeLimit) },
     }
   }
 
-  // ── Get one payment ───────────────────────────────────────
+  // ── Get one payment ───────────────────────────────────────────────────────
   async findOne(id: string) {
     const payment = await this.prisma.payment.findUnique({
       where: { id },
@@ -203,34 +213,33 @@ export class PaymentsService {
     return payment
   }
 
-  // ── Stats pembayaran ──────────────────────────────────────
+  // ── Stats pembayaran ──────────────────────────────────────────────────────
   async getStats() {
-  const now = new Date()
-  const month = now.getMonth() + 1
-  const year = now.getFullYear()
+    const now = new Date()
+    const month = now.getMonth() + 1
+    const year = now.getFullYear()
 
-  const [pending, approved, rejected, totalApproved] = await Promise.all([
-    this.prisma.payment.count({ where: { status: 'PENDING' } }),
-    this.prisma.payment.count({ where: { status: 'APPROVED' } }),
-    this.prisma.payment.count({ where: { status: 'REJECTED' } }),
-    // Tambah ini — total amount yang sudah diapprove bulan ini
-    this.prisma.payment.aggregate({
-      where: {
-        status: 'APPROVED',
-        processedAt: {
-          gte: new Date(year, month - 1, 1),
-          lt: new Date(year, month, 1),
+    const [pending, approved, rejected, totalApproved] = await Promise.all([
+      this.prisma.payment.count({ where: { status: 'PENDING' } }),
+      this.prisma.payment.count({ where: { status: 'APPROVED' } }),
+      this.prisma.payment.count({ where: { status: 'REJECTED' } }),
+      this.prisma.payment.aggregate({
+        where: {
+          status: 'APPROVED',
+          processedAt: {
+            gte: new Date(year, month - 1, 1),
+            lt: new Date(year, month, 1),
+          },
         },
-      },
-      _sum: { amount: true },
-    }),
-  ])
+        _sum: { amount: true },
+      }),
+    ])
 
-  return {
-    pending,
-    approved,
-    rejected,
-    totalAmountApproved: totalApproved._sum.amount ?? 0,
+    return {
+      pending,
+      approved,
+      rejected,
+      totalAmountApproved: totalApproved._sum.amount ?? 0,
+    }
   }
-}
 }
