@@ -16,10 +16,6 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 
-  // ← tambah ini, setelah enableCors
-  app.useStaticAssets(join(__dirname, '..', 'public'), {
-    prefix: '/public',
-  })
 
   app.use((req: any, res: any, next: any) => {
     res.setHeader('X-Content-Type-Options', 'nosniff')
