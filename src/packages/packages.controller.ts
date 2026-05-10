@@ -8,9 +8,10 @@ export class PackagesController {
 
   // Public — bisa diakses landing page tanpa login
   @Get()
-  findAll(@Query('active') active?: string) {
-    return this.packagesService.findAll(active === 'true')
-  }
+findAll(@Query('active') active?: string) {
+  const onlyActive = active !== 'false'
+  return this.packagesService.findAll(onlyActive)
+}
 
   @Get(':id')
   findOne(@Param('id') id: string) {
