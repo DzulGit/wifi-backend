@@ -187,24 +187,31 @@ export class BillingService {
 
   // ── Stats billing ─────────────────────────────────────────
   async getStats() {
-    const now = new Date()
-    const month = now.getMonth() + 1
-    const year = now.getFullYear()
+  const now = new Date()
+  const month = now.getMonth() + 1
+  const year = now.getFullYear()
 
-    const [unpaid, pending, paid, overdue, totalRevenue] = await Promise.all([
-      this.prisma.invoice.count({ where: { status: 'UNPAID' } }),
-      this.prisma.invoice.count({ where: { status: 'PENDING' } }),
-      this.prisma.invoice.count({ where: { status: 'PAID' } }),
-      this.prisma.invoice.count({ where: { status: 'OVERDUE' } }),
-      this.prisma.invoice.aggregate({
-        where: { status: 'PAID', billingMonth: month, billingYear: year },
-        _sum: { totalAmount: true },
-      }),
-    ])
+  const [unpaid, pending, paid, overdue, totalRevenue] = await Promise.all([
+    this.prisma.invoice.count({ where: { status: 'UNPAID' } }),
+    this.prisma.invoice.count({ where: { status: 'PENDING' } }),
+    this.prisma.invoice.count({ where: { status: 'PAID' } }),
+    this.prisma.invoice.count({ where: { status: 'OVERDUE' } }),
+    // Fix: hitung dari payments APPROVED bulan ini, bukan invoice PAID
+    this.prisma.payment.aggregate({
+      where: {
+        status: 'APPROVED',
+        processedAt: {
+          gte: new Date(year, month - 1, 1),
+          lt: new Date(year, month, 1),
+        },
+      },
+      _sum: { amount: true },
+    }),
+  ])
 
     return {
       unpaid, pending, paid, overdue,
-      totalRevenueThisMonth: totalRevenue._sum.totalAmount ?? 0,
+      totalRevenueThisMonth: totalRevenue._sum.amount ?? 0,
     }
   }
 }
