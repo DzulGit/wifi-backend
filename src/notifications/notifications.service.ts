@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import * as nodemailer from 'nodemailer'
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class NotificationsService {
@@ -10,6 +11,33 @@ export class NotificationsService {
       pass: process.env.GMAIL_PASS,
     },
   })
+  
+  // ==========================================
+  constructor(private prisma: PrismaService) { 
+    this.transporter = nodemailer.createTransport({
+      // ... (kode bawaanmu biarkan saja)
+    });
+  }
+
+  // ==========================================
+  // 3. TAMBAHKAN 2 FUNGSI BARU INI DI BAWAH
+  // ==========================================
+  
+  async getAppNotifications(userId: string) {
+    // Menarik data murni sesuai struktur tabel SQL kamu
+    return this.prisma.notification.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async markAsRead(id: string) {
+    // Mengubah isRead sesuai struktur tabel SQL kamu
+    return this.prisma.notification.update({
+      where: { id },
+      data: { isRead: true, readAt: new Date() },
+    });
+  }
 
   async sendOtpEmail(email: string, code: string, name: string) {
     await this.transporter.sendMail({

@@ -9,7 +9,7 @@ async function bootstrap() {
   // FIX: Hapus trailing slash dari origin — menyebabkan mismatch CORS
   const allowedOrigins = [
     process.env.FRONTEND_URL ?? 'https://wifi-frontend-978253671723.asia-southeast2.run.app',
-    'https://wifi-frontend-978253671723.asia-southeast2.run.app',
+    'https://wifi-frontend-978253671723.asia-southeast2.run.app', 'http://localhost:3000',
   ]
 
   app.enableCors({
