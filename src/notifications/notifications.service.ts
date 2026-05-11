@@ -12,31 +12,68 @@ export class NotificationsService {
     },
   })
   
-  // ==========================================
-  constructor(private prisma: PrismaService) { 
+  // 1. Constructor cukup satu dan inisialisasi transporter di sini
+  constructor(private prisma: PrismaService) {
     this.transporter = nodemailer.createTransport({
-      // ... (kode bawaanmu biarkan saja)
+      service: 'gmail',
+      auth: {
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_PASS,
+      },
     });
   }
 
-  // ==========================================
-  // 3. TAMBAHKAN 2 FUNGSI BARU INI DI BAWAH
-  // ==========================================
-  
+  // FUNGSI DINAMIS UNTUK NOTIFIKASI APP
   async getAppNotifications(userId: string) {
-    // Menarik data murni sesuai struktur tabel SQL kamu
-    return this.prisma.notification.findMany({
-      where: { userId },
+    // 1. Ambil Tagihan (Invoice) yang UNPAID
+    const invoices = await this.prisma.invoice.findMany({
+      where: { userId, status: 'UNPAID' },
+      include: { package: true },
       orderBy: { createdAt: 'desc' },
     });
+
+    // 2. Ambil Balasan Tiket (TicketReply) dari Admin
+    const adminReplies = await this.prisma.ticketReply.findMany({
+      where: {
+        ticket: { userId },
+        isFromAdmin: true, // Sesuai kolom di schema kamu
+      },
+      include: { ticket: true },
+      take: 5,
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // 3. Mapping data Invoice ke format Notifikasi
+    const invoiceNotifs = invoices.map((inv) => ({
+      id: `inv-${inv.id}`,
+      title: inv.penaltyAmount > 0 ? 'Peringatan Jatuh Tempo' : 'Tagihan Baru Terbit',
+      message: inv.penaltyAmount > 0 
+        ? `Tagihan ${inv.invoiceNumber} sudah lewat jatuh tempo. Denda Rp ${inv.penaltyAmount.toLocaleString()} ditambahkan.`
+        : `Tagihan ${inv.invoiceNumber} sebesar Rp ${inv.totalAmount.toLocaleString()} sudah tersedia.`,
+      type: inv.penaltyAmount > 0 ? 'WARNING' : 'BILLING',
+      createdAt: inv.createdAt,
+      isRead: false,
+    }));
+
+    // 4. Mapping data TicketReply ke format Notifikasi
+    const chatNotifs = adminReplies.map((reply) => ({
+      id: `reply-${reply.id}`,
+      title: 'Pesan Baru dari Admin',
+      message: reply.message.length > 50 ? `${reply.message.substring(0, 50)}...` : reply.message,
+      type: 'INFO',
+      createdAt: reply.createdAt,
+      isRead: false,
+    }));
+
+    // 5. Gabungkan dan Urutkan berdasarkan tanggal terbaru
+    return [...invoiceNotifs, ...chatNotifs].sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    );
   }
 
+  // Fungsi placeholder
   async markAsRead(id: string) {
-    // Mengubah isRead sesuai struktur tabel SQL kamu
-    return this.prisma.notification.update({
-      where: { id },
-      data: { isRead: true, readAt: new Date() },
-    });
+    return { status: 'success' };
   }
 
   async sendOtpEmail(email: string, code: string, name: string) {
