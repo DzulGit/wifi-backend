@@ -4,15 +4,8 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class NotificationsService {
-  private transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.GMAIL_USER,
-      pass: process.env.GMAIL_PASS,
-    },
-  })
-  
-  // 1. Constructor cukup satu dan inisialisasi transporter di sini
+  private transporter: nodemailer.Transporter;
+
   constructor(private prisma: PrismaService) {
     this.transporter = nodemailer.createTransport({
       service: 'gmail',
