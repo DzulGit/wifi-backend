@@ -33,7 +33,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         where: { id: payload.sub },
       })
       if (!admin || !admin.isActive) throw new UnauthorizedException()
-      return { ...admin, type: 'admin' }
+      // SECURITY FIX: Strip password hash agar tidak bocor ke req.user / GET /auth/me
+      const { password, ...safeAdmin } = admin
+      return { ...safeAdmin, type: 'admin' }
     }
 
     if (payload.type === 'user') {
@@ -43,7 +45,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       if (!user) throw new UnauthorizedException()
       // SECURITY FIX: User yang INACTIVE tidak boleh menggunakan token lama
       if (user.status === 'INACTIVE') throw new UnauthorizedException('Akun tidak aktif')
-      return { ...user, type: 'user' }
+      // SECURITY FIX: Strip semua field sensitif agar tidak bocor ke frontend
+      const { password, activationToken, activationExpiry, ...safeUser } = user
+      return { ...safeUser, type: 'user' }
     }
 
     throw new UnauthorizedException('Tipe token tidak dikenal')
