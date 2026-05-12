@@ -1,13 +1,17 @@
-import { Controller, Get, Patch, Param, Query } from '@nestjs/common';
+import { Controller, Get, Patch, Param, UseGuards, Request } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
+import { AuthGuard } from '@nestjs/passport';
 
-@Controller('notifications') // Sesuai URL frontend
+@UseGuards(AuthGuard('jwt'))
+@Controller('notifications')
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
   @Get()
-  async getNotifications(@Query('userId') userId: string) {
-    if (!userId) return { status: 'error', data: [] };
+  async getNotifications(@Request() req: any) {
+    // SECURITY FIX: userId diambil dari JWT token, bukan dari query parameter
+    // Ini mencegah IDOR — user hanya bisa lihat notifikasinya sendiri
+    const userId = req.user.id;
     const data = await this.notificationsService.getAppNotifications(userId);
     return { data };
   }
