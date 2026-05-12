@@ -65,8 +65,13 @@ export class PaymentsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.paymentsService.findOne(id)
+  async findOne(@Param('id') id: string, @Request() req: any) {
+    const payment = await this.paymentsService.findOne(id)
+    // SECURITY FIX: Cegah IDOR — user hanya boleh lihat pembayaran miliknya sendiri
+    if (req.user?.type !== 'admin' && payment.userId !== req.user.id) {
+      throw new ForbiddenException('Tidak memiliki akses ke pembayaran ini')
+    }
+    return payment
   }
 
   // ── Submit pembayaran (user) ───────────────────────────────────────────────
