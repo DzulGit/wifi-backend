@@ -5,12 +5,28 @@ import { PrismaService } from '../prisma/prisma.service'
 export class TicketsService {
   constructor(private prisma: PrismaService) {}
 
-  // ── Generate ticket number ────────────────────────────────
+  // ── Generate ticket number with retry logic ───────────────
   private async generateTicketNumber(): Promise<string> {
-    const count = await this.prisma.ticket.count()
     const year = new Date().getFullYear()
     const month = String(new Date().getMonth() + 1).padStart(2, '0')
-    return `TKT-${year}${month}-${String(count + 1).padStart(4, '0')}`
+    const maxAttempts = 5
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const count = await this.prisma.ticket.count()
+      const ticketNumber = `TKT-${year}${month}-${String(count + 1 + attempt).padStart(4, '0')}`
+      
+      const existing = await this.prisma.ticket.findUnique({
+        where: { ticketNumber },
+      })
+      
+      if (!existing) {
+        return ticketNumber
+      }
+    }
+
+    // Fallback: append timestamp for absolute uniqueness
+    const timestamp = Date.now()
+    return `TKT-${year}${month}-${String(timestamp).slice(-4)}`
   }
 
   // ── Buat tiket (oleh user) ────────────────────────────────

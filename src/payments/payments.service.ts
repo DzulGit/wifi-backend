@@ -9,12 +9,28 @@ export class PaymentsService {
     private notifications: NotificationsService,
   ) {}
 
-  // ── Generate payment code ─────────────────────────────────────────────────
+  // ── Generate payment code with retry logic ────────────────────────────────
   private async generatePaymentCode(): Promise<string> {
-    const count = await this.prisma.payment.count()
     const year = new Date().getFullYear()
     const month = String(new Date().getMonth() + 1).padStart(2, '0')
-    return `PAY-${year}${month}-${String(count + 1).padStart(4, '0')}`
+    const maxAttempts = 5
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const count = await this.prisma.payment.count()
+      const paymentCode = `PAY-${year}${month}-${String(count + 1 + attempt).padStart(4, '0')}`
+      
+      const existing = await this.prisma.payment.findUnique({
+        where: { paymentCode },
+      })
+      
+      if (!existing) {
+        return paymentCode
+      }
+    }
+
+    // Fallback: append timestamp for absolute uniqueness
+    const timestamp = Date.now()
+    return `PAY-${year}${month}-${String(timestamp).slice(-4)}`
   }
 
   // ── Submit pembayaran (oleh user) ─────────────────────────────────────────

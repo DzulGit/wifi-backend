@@ -9,12 +9,28 @@ export class BillingService {
     private notifications: NotificationsService,
   ) {}
 
-  // ── Generate invoice number ───────────────────────────────
+  // ── Generate invoice number with retry logic ──────────────
   private async generateInvoiceNumber(): Promise<string> {
-    const count = await this.prisma.invoice.count()
     const year = new Date().getFullYear()
     const month = String(new Date().getMonth() + 1).padStart(2, '0')
-    return `INV-${year}${month}-${String(count + 1).padStart(4, '0')}`
+    const maxAttempts = 5
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const count = await this.prisma.invoice.count()
+      const invoiceNumber = `INV-${year}${month}-${String(count + 1 + attempt).padStart(4, '0')}`
+      
+      const existing = await this.prisma.invoice.findUnique({
+        where: { invoiceNumber },
+      })
+      
+      if (!existing) {
+        return invoiceNumber
+      }
+    }
+
+    // Fallback: append timestamp for absolute uniqueness
+    const timestamp = Date.now()
+    return `INV-${year}${month}-${String(timestamp).slice(-4)}`
   }
 
   // ── Generate tagihan untuk 1 user ─────────────────────────
