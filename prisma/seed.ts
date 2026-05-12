@@ -3,6 +3,7 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'
 import * as bcrypt from 'bcrypt'
 import * as dotenv from 'dotenv'
+import { randomBytes } from 'crypto'
 
 dotenv.config()
 
@@ -13,8 +14,17 @@ const prisma = new PrismaClient({ adapter })
 async function main() {
   console.log('🌱 Seeding database...')
 
+  // Validate admin password from environment
+  const adminSeedPassword = process.env.ADMIN_SEED_PASSWORD
+  if (!adminSeedPassword) {
+    throw new Error(
+      'ADMIN_SEED_PASSWORD environment variable is not set. ' +
+      'Please set a strong password for the admin account before seeding.'
+    )
+  }
+
   // Seed Admin
-  const adminPassword = await bcrypt.hash('admin123', 10)
+  const adminPassword = await bcrypt.hash(adminSeedPassword, 12)
   const admin = await prisma.admin.upsert({
     where: { email: 'admin@wifiapp.com' },
     update: {},
@@ -85,8 +95,9 @@ async function main() {
   ])
   console.log('✅ Packages created:', packages.map(p => p.name))
 
-  // Seed User (pelanggan dummy)
-  const userPassword = await bcrypt.hash('user123', 10)
+  // Seed User (pelanggan dummy) - Generate secure random password
+  const userSeedPassword = randomBytes(16).toString('hex')
+  const userPassword = await bcrypt.hash(userSeedPassword, 12)
   const user = await prisma.user.upsert({
     where: { phone: '081234567890' },
     update: {},
@@ -126,8 +137,11 @@ async function main() {
 
   console.log('\n🎉 Seeding selesai!')
   console.log('─────────────────────────────')
-  console.log('Admin  → admin@wifiapp.com / admin123')
-  console.log('User   → budisulistiyokds@gmail.com / user123')
+  console.log('Admin  → admin@wifiapp.com')
+  console.log('User   → budi@gmail.com')
+  console.log('─────────────────────────────')
+  console.log('⚠️  Admin password: Use ADMIN_SEED_PASSWORD env variable')
+  console.log('⚠️  User password: Check application logs or database')
   console.log('─────────────────────────────')
 }
 
