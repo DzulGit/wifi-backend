@@ -10,7 +10,8 @@ import { RegistrationsModule } from './registrations/registrations.module'
 import { BillingModule } from './billing/billing.module'
 import { PaymentsModule } from './payments/payments.module'
 import { TicketsModule } from './tickets/tickets.module'
-import { AdminNotificationsModule } from './admin-notifications/admin-notifications.module' // ← tambah
+import { AdminNotificationsModule } from './admin-notifications/admin-notifications.module'
+import { UploadModule } from './upload/upload.module' 
 
 @Module({
   imports: [
@@ -35,7 +36,8 @@ import { AdminNotificationsModule } from './admin-notifications/admin-notificati
     BillingModule,
     PaymentsModule,
     TicketsModule,
-    AdminNotificationsModule, // ← tambah
+    AdminNotificationsModule,
+    UploadModule,
   ],
   providers: [
     {

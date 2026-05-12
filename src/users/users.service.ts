@@ -115,6 +115,7 @@ export class UsersService {
     province?: string
     packageId?: string
     notes?: string
+    profilePhoto?: string
   }) {
     const user = await this.prisma.user.findUnique({ where: { id } })
     if (!user) throw new NotFoundException('User tidak ditemukan')
