@@ -107,27 +107,34 @@ export class PaymentsService {
       throw new BadRequestException('Pembayaran sudah diproses sebelumnya')
     }
 
-    await this.prisma.payment.update({
-      where: { id },
-      data: {
-        status: 'APPROVED',
-        processedById: adminId,
-        processedAt: new Date(),
-      },
-    })
-
-    await this.prisma.invoice.update({
-      where: { id: payment.invoiceId },
-      data: { status: 'PAID', paidAt: new Date() },
-    })
-
-    if (payment.user.status === 'SUSPENDED') {
-      await this.prisma.user.update({
-        where: { id: payment.userId },
-        data: { status: 'ACTIVE' },
+    // Wrap database updates in transaction for data consistency
+    await this.prisma.$transaction(async (tx) => {
+      // Update payment status to APPROVED
+      await tx.payment.update({
+        where: { id },
+        data: {
+          status: 'APPROVED',
+          processedById: adminId,
+          processedAt: new Date(),
+        },
       })
-    }
 
+      // Update invoice status to PAID
+      await tx.invoice.update({
+        where: { id: payment.invoiceId },
+        data: { status: 'PAID', paidAt: new Date() },
+      })
+
+      // Reactivate user if suspended
+      if (payment.user.status === 'SUSPENDED') {
+        await tx.user.update({
+          where: { id: payment.userId },
+          data: { status: 'ACTIVE' },
+        })
+      }
+    })
+
+    // Send email notification after transaction succeeds
     if (payment.user.email) {
       await this.notifications.sendPaymentConfirmationEmail(
         payment.user.email,
