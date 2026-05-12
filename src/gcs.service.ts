@@ -2,7 +2,6 @@ import { Injectable, BadRequestException } from '@nestjs/common'
 import { Storage } from '@google-cloud/storage'
 import { extname } from 'path'
 
-// SECURITY FIX: Magic bytes validasi file — mencegah polyglot file / bypass ekstensi
 const ALLOWED_SIGNATURES: Record<string, Buffer[]> = {
   'image/jpeg': [Buffer.from([0xff, 0xd8, 0xff])],
   'image/png': [Buffer.from([0x89, 0x50, 0x4e, 0x47])],
@@ -17,10 +16,11 @@ const SAFE_EXTENSIONS: Record<string, string> = {
 
 @Injectable()
 export class GcsService {
-  private storage = new Storage() // Pakai credentials Cloud Run otomatis
-  private bucket = this.storage.bucket('wifi-payments-cakrana')
+  private storage = new Storage()
+  // FIX: Ganti ke nama bucket baru lu
+  private bucketName = 'wifi-storage-cakrana'
+  private bucket = this.storage.bucket(this.bucketName)
 
-  // ── Validasi file berdasarkan magic bytes ──────────────────────────────────
   private validateFileMagicBytes(file: Express.Multer.File): void {
     const { buffer, mimetype } = file
     const signatures = ALLOWED_SIGNATURES[mimetype]
@@ -29,7 +29,6 @@ export class GcsService {
       throw new BadRequestException('Tipe file tidak diizinkan')
     }
 
-    // Cek apakah buffer dimulai dengan salah satu signature yang valid
     const isValid = signatures.some((sig) => buffer.slice(0, sig.length).equals(sig))
 
     if (!isValid) {
@@ -39,27 +38,28 @@ export class GcsService {
     }
   }
 
-  async uploadFile(file: Express.Multer.File): Promise<string> {
-    // SECURITY FIX: Validasi magic bytes sebelum upload ke GCS
+  // MODIFIKASI: Tambahkan parameter 'folder' agar reusable
+  async uploadFile(file: Express.Multer.File, folder: string): Promise<string> {
     this.validateFileMagicBytes(file)
 
-    // SECURITY FIX: Gunakan ekstensi dari MIME type yang tervalidasi,
-    // bukan dari originalname (mencegah path traversal / ekstensi berbahaya)
     const safeExt = SAFE_EXTENSIONS[file.mimetype] ?? '.bin'
-
-    // SECURITY FIX: Jangan gunakan originalname sama sekali di path GCS
-    const uniqueName = `payments/bukti-${Date.now()}-${Math.round(Math.random() * 1e9)}${safeExt}`
+    
+    // Penamaan file lebih general sesuai folder
+    const filePrefix = folder === 'payments' ? 'bukti' : 'img'
+    const uniqueName = `${folder}/${filePrefix}-${Date.now()}-${Math.round(Math.random() * 1e9)}${safeExt}`
 
     const blob = this.bucket.file(uniqueName)
 
     await blob.save(file.buffer, {
       contentType: file.mimetype,
+      resumable: false, // Penting buat file kecil agar lebih cepat
       metadata: {
-        // Tambah metadata untuk audit trail
         uploadedAt: new Date().toISOString(),
+        cacheControl: 'public, max-age=31536000',
       },
     })
 
-    return `https://storage.googleapis.com/wifi-payments-cakrana/${uniqueName}`
+    // Mengembalikan URL dinamis berdasarkan nama bucket
+    return `https://storage.googleapis.com/${this.bucketName}/${uniqueName}`
   }
 }

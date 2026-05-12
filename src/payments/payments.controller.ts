@@ -110,7 +110,7 @@ export class PaymentsController {
         if (file.size > MAX_FILE_SIZE_BYTES) {
           throw new BadRequestException('Ukuran file maksimal 5 MB')
         }
-        proofImageUrl = await this.gcsService.uploadFile(file)
+        proofImageUrl = await this.gcsService.uploadFile(file, 'payments')
       }
 
       const paymentData = {
