@@ -67,7 +67,9 @@ export class AuthController {
   }
 
   // ── OTP endpoints ─────────────────────────────────────────────────────────
-  @SkipThrottle()
+  // SECURITY FIX: Hapus @SkipThrottle(), terapkan rate limit ketat (3 req / 5 menit)
+  // Mencegah email bombing / penyalahgunaan endpoint OTP
+  @Throttle({ default: { limit: 3, ttl: 300000 } })
   @Post('send-otp')
   sendOtp(@Body() body: SendOtpDto) {
     if (!body.email) throw new BadRequestException('Email wajib diisi')
