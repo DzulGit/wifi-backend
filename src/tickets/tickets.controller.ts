@@ -63,6 +63,7 @@ export class TicketsController {
     return this.ticketsService.reply(id, {
       message: body.message,
       isFromAdmin: isAdmin,
+      userId: req.user.id,
       adminId: isAdmin ? req.user.id : undefined,
       attachmentUrl: body.attachmentUrl,
     })
@@ -75,7 +76,9 @@ export class TicketsController {
     @Request() req: any,
   ) {
     // SECURITY FIX: Hanya admin yang bisa ubah status tiket
-    this.requireAdmin(req)
+    if (req.user?.type !== 'admin') {
+      throw new ForbiddenException('Hanya admin yang bisa mengubah status tiket')
+    }
     // SECURITY FIX: Validasi status agar tidak bisa diisi string sembarang
     const validStatuses = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED']
     if (!validStatuses.includes(body.status)) {

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 
 @Injectable()
@@ -114,12 +114,18 @@ export class TicketsService {
   async reply(ticketId: string, data: {
     message: string
     isFromAdmin: boolean
+    userId?: string
     adminId?: string
     attachmentUrl?: string
   }) {
     const ticket = await this.prisma.ticket.findUnique({ where: { id: ticketId } })
     if (!ticket) throw new NotFoundException('Tiket tidak ditemukan')
     if (ticket.status === 'CLOSED') throw new BadRequestException('Tiket sudah ditutup')
+
+    // SECURITY FIX: Ownership check - non-admin users can only reply to their own tickets
+    if (!data.isFromAdmin && data.userId && ticket.userId !== data.userId) {
+      throw new ForbiddenException('Tidak memiliki akses ke tiket ini')
+    }
 
     const reply = await this.prisma.ticketReply.create({
       data: {
