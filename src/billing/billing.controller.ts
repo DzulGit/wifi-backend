@@ -20,6 +20,7 @@ export class BillingController {
     return this.billingService.getStats()
   }
 
+  // 👇 PERUBAHAN UNTUK USER: Hapus requireAdmin & Kunci ID Pencarian 👇
   @Get()
   findAll(
     @Request() req: any,
@@ -30,10 +31,17 @@ export class BillingController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    this.requireAdmin(req)
+    // Kita tentukan target pencarian userId
+    let targetUserId = userId;
+    
+    // Jika yang login BUKAN admin, paksa target pencarian ke ID dia sendiri
+    if (req.user?.type !== 'admin') {
+      targetUserId = req.user.id;
+    }
+
     return this.billingService.findAll({
       status,
-      userId,
+      userId: targetUserId, // Pakai targetUserId yang sudah diamankan
       month: month ? parseInt(month) : undefined,
       year: year ? parseInt(year) : undefined,
       page: page ? parseInt(page) : 1,
@@ -41,9 +49,9 @@ export class BillingController {
     })
   }
 
+  // 👇 PERUBAHAN UNTUK USER: Hapus requireAdmin agar bisa lihat detail 👇
   @Get(':id')
   findOne(@Param('id') id: string, @Request() req: any) {
-    this.requireAdmin(req)
     return this.billingService.findOne(id)
   }
 
