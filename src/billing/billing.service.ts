@@ -79,6 +79,22 @@ export class BillingService {
       include: { user: true, package: true },
     })
 
+    // 👇 1. NOTIFIKASI APLIKASI DITANAM DI SINI 👇
+    const formattedAmount = new Intl.NumberFormat('id-ID', {
+      style: 'currency', 
+      currency: 'IDR', 
+      minimumFractionDigits: 0
+    }).format(invoice.totalAmount);
+
+    await this.notifications.createNotification({
+      userId: invoice.userId,
+      type: 'INVOICE_CREATED',
+      title: 'Tagihan Baru Terbit 📄',
+      message: `Tagihan internet kamu sebesar ${formattedAmount} sudah keluar. Yuk segera dibayar sebelum jatuh tempo!`,
+      metadata: { invoiceId: invoice.id }
+    });
+    // 👆 SELESAI 👆
+
     // Kirim notifikasi email
     if (user.email) {
       await this.notifications.sendInvoiceEmail(
@@ -105,21 +121,21 @@ export class BillingService {
     const results = { success: 0, skipped: 0, errors: [] as string[] }
 
     for (const user of activeUsers) {
-  try {
-    await this.generateInvoice(user.id, adminId, month, year)
-    results.success++
-  } catch (e) {
-    if (e instanceof Error) {
-      if (e.message.includes('sudah dibuat')) {
-        results.skipped++
-      } else {
-        results.errors.push(`${user.customerCode}: ${e.message}`)
+      try {
+        await this.generateInvoice(user.id, adminId, month, year)
+        results.success++
+      } catch (e) {
+        if (e instanceof Error) {
+          if (e.message.includes('sudah dibuat')) {
+            results.skipped++
+          } else {
+            results.errors.push(`${user.customerCode}: ${e.message}`)
+          }
+        } else {
+          results.errors.push(`${user.customerCode}: Unknown error`)
+        }
       }
-    } else {
-      results.errors.push(`${user.customerCode}: Unknown error`)
     }
-  }
-}
 
     return {
       message: `Generate selesai: ${results.success} berhasil, ${results.skipped} dilewati`,
@@ -191,7 +207,7 @@ export class BillingService {
     })
     const penalty = parseInt(penaltySetting?.value ?? '10000')
 
-    return this.prisma.invoice.update({
+    const updatedInvoice = await this.prisma.invoice.update({
       where: { id },
       data: {
         penaltyAmount: { increment: penalty },
@@ -199,31 +215,42 @@ export class BillingService {
         status: 'OVERDUE',
       },
     })
+
+    // 👇 2. NOTIFIKASI DENDA DITANAM DI SINI 👇
+    await this.notifications.createNotification({
+      userId: updatedInvoice.userId,
+      type: 'INVOICE_REMINDER', 
+      title: 'Peringatan Jatuh Tempo ⚠️',
+      message: `Tagihan internet kamu telah melewati batas waktu dan dikenakan denda. Total tagihan saat ini: Rp ${updatedInvoice.totalAmount.toLocaleString('id-ID')}.`,
+      metadata: { invoiceId: updatedInvoice.id }
+    });
+    // 👆 SELESAI 👆
+
+    return updatedInvoice
   }
 
   // ── Stats billing ─────────────────────────────────────────
   async getStats() {
-  const now = new Date()
-  const month = now.getMonth() + 1
-  const year = now.getFullYear()
+    const now = new Date()
+    const month = now.getMonth() + 1
+    const year = now.getFullYear()
 
-  const [unpaid, pending, paid, overdue, totalRevenue] = await Promise.all([
-    this.prisma.invoice.count({ where: { status: 'UNPAID' } }),
-    this.prisma.invoice.count({ where: { status: 'PENDING' } }),
-    this.prisma.invoice.count({ where: { status: 'PAID' } }),
-    this.prisma.invoice.count({ where: { status: 'OVERDUE' } }),
-    // Fix: hitung dari payments APPROVED bulan ini, bukan invoice PAID
-    this.prisma.payment.aggregate({
-      where: {
-        status: 'APPROVED',
-        processedAt: {
-          gte: new Date(year, month - 1, 1),
-          lt: new Date(year, month, 1),
+    const [unpaid, pending, paid, overdue, totalRevenue] = await Promise.all([
+      this.prisma.invoice.count({ where: { status: 'UNPAID' } }),
+      this.prisma.invoice.count({ where: { status: 'PENDING' } }),
+      this.prisma.invoice.count({ where: { status: 'PAID' } }),
+      this.prisma.invoice.count({ where: { status: 'OVERDUE' } }),
+      this.prisma.payment.aggregate({
+        where: {
+          status: 'APPROVED',
+          processedAt: {
+            gte: new Date(year, month - 1, 1),
+            lt: new Date(year, month, 1),
+          },
         },
-      },
-      _sum: { amount: true },
-    }),
-  ])
+        _sum: { amount: true },
+      }),
+    ])
 
     return {
       unpaid, pending, paid, overdue,

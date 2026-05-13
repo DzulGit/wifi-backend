@@ -86,6 +86,16 @@ export class PaymentsService {
       data: { status: 'PENDING' },
     })
 
+    // 👇 1. NOTIFIKASI SUBMIT DITANAM DI SINI 👇
+    await this.notifications.createNotification({
+      userId: userId,
+      type: 'PAYMENT_RECEIVED', // Sesuai enum di schema
+      title: 'Pembayaran Sedang Diproses ⏳',
+      message: `Terima kasih! Bukti pembayaran untuk tagihan ${invoice.invoiceNumber} telah kami terima dan sedang menunggu validasi admin.`,
+      metadata: { paymentId: payment.id, invoiceId: invoice.id }
+    });
+    // 👆 SELESAI 👆
+
     return {
       message: 'Pembayaran berhasil dikirim, menunggu validasi admin',
       payment,
@@ -134,6 +144,16 @@ export class PaymentsService {
       }
     })
 
+    // 👇 2. NOTIFIKASI ACC DITANAM DI SINI 👇
+    await this.notifications.createNotification({
+      userId: payment.userId,
+      type: 'PAYMENT_APPROVED', // Sesuai enum di schema
+      title: 'Pembayaran Berhasil! 🎉',
+      message: `Hore! Pembayaran untuk tagihan ${payment.invoice.invoiceNumber} sudah divalidasi. Tagihan kamu sudah lunas.`,
+      metadata: { paymentId: payment.id, invoiceId: payment.invoiceId }
+    });
+    // 👆 SELESAI 👆
+
     // Send email notification after transaction succeeds
     if (payment.user.email) {
       await this.notifications.sendPaymentConfirmationEmail(
@@ -178,6 +198,16 @@ export class PaymentsService {
       where: { id: payment.invoiceId },
       data: { status: 'UNPAID' },
     })
+
+    // 👇 3. NOTIFIKASI TOLAK DITANAM DI SINI 👇
+    await this.notifications.createNotification({
+      userId: payment.userId,
+      type: 'PAYMENT_REJECTED', // Sesuai enum di schema
+      title: 'Pembayaran Ditolak ❌',
+      message: `Maaf, bukti pembayaran untuk tagihan ${payment.invoice.invoiceNumber} ditolak admin dengan alasan: "${reason.trim()}". Silakan upload ulang bukti yang benar.`,
+      metadata: { paymentId: payment.id, invoiceId: payment.invoiceId }
+    });
+    // 👆 SELESAI 👆
 
     return { message: 'Pembayaran ditolak, tagihan dikembalikan ke unpaid' }
   }

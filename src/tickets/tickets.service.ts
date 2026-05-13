@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { NotificationsService } from '../notifications/notifications.service' // <-- IMPORT INI
 
 @Injectable()
 export class TicketsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationsService // <-- INJECT DI SINI
+  ) {}
 
   // ── Generate ticket number with retry logic ───────────────
   private async generateTicketNumber(): Promise<string> {
@@ -145,6 +149,18 @@ export class TicketsService {
       })
     }
 
+    // 👇 1. NOTIFIKASI BALASAN TIKET DITANAM DI SINI 👇
+    if (data.isFromAdmin) {
+      await this.notifications.createNotification({
+        userId: ticket.userId,
+        type: 'INFO' as any, // Ganti 'INFO' dengan enum yang ada di schema.prisma kamu jika merah (misal: 'TICKET_REPLY')
+        title: 'Tiket Dibalas Admin 🎧',
+        message: `Admin telah membalas tiket pengaduan kamu (#${ticket.ticketNumber}). Silakan cek balasan terbaru.`,
+        metadata: { ticketId: ticket.id }
+      });
+    }
+    // 👆 SELESAI 👆
+
     return reply
   }
 
@@ -153,13 +169,27 @@ export class TicketsService {
     const ticket = await this.prisma.ticket.findUnique({ where: { id } })
     if (!ticket) throw new NotFoundException('Tiket tidak ditemukan')
 
-    return this.prisma.ticket.update({
+    const updatedTicket = await this.prisma.ticket.update({
       where: { id },
       data: {
         status: status as any,
         resolvedAt: status === 'RESOLVED' ? new Date() : undefined,
       },
     })
+
+    // 👇 2. NOTIFIKASI UPDATE STATUS DITANAM DI SINI 👇
+    if (status === 'RESOLVED' || status === 'CLOSED') {
+      await this.notifications.createNotification({
+        userId: ticket.userId,
+        type: 'INFO' as any, // Ganti 'INFO' dengan enum yang ada di schema.prisma kamu jika merah
+        title: 'Status Pengaduan Diperbarui ✅',
+        message: `Tiket pengaduan kamu (#${ticket.ticketNumber}) sekarang berstatus ${status}. Terima kasih telah menghubungi kami.`,
+        metadata: { ticketId: ticket.id }
+      });
+    }
+    // 👆 SELESAI 👆
+
+    return updatedTicket
   }
 
   // ── Stats tiket ───────────────────────────────────────────

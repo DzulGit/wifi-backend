@@ -3,10 +3,14 @@ import { PrismaService } from '../prisma/prisma.service'
 import { UserStatus } from '@prisma/client'
 import * as bcrypt from 'bcrypt'
 import { randomBytes } from 'crypto'
+import { NotificationsService } from '../notifications/notifications.service' // <-- 1. IMPORT INI
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationsService // <-- 2. INJECT DI SINI
+  ) {}
 
   // ── Generate customer code ────────────────────────────────
   private async generateCustomerCode(): Promise<string> {
@@ -137,6 +141,25 @@ export class UsersService {
       where: { id },
       data: { status },
     })
+
+    // 👇 3. NOTIFIKASI STATUS AKUN DITANAM DI SINI 👇
+    if (status === 'ACTIVE') {
+      await this.notifications.createNotification({
+        userId: id,
+        type: 'ACCOUNT_ACTIVATED' as any, // Memakai casting as any biar nggak rewel di TypeScript
+        title: 'Akun Diaktifkan ✅',
+        message: 'Selamat! Akun internet kamu sudah aktif dan bisa digunakan kembali.',
+      });
+    } else if (status === 'SUSPENDED') {
+      await this.notifications.createNotification({
+        userId: id,
+        type: 'ACCOUNT_SUSPENDED' as any,
+        title: 'Layanan Terisolir ⚠️',
+        message: 'Mohon maaf, layanan internet kamu saat ini ditangguhkan sementara. Silakan lunasi tagihan atau hubungi admin.',
+      });
+    }
+    // 👆 SELESAI 👆
+
     return {
       message: `User berhasil di-${status.toLowerCase()}`,
       user: this.excludeSensitive(updated),

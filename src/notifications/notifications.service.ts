@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common'
-import * as nodemailer from 'nodemailer'
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import * as nodemailer from 'nodemailer';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationType } from '@prisma/client';
 
 @Injectable()
 export class NotificationsService {
@@ -16,58 +17,61 @@ export class NotificationsService {
     });
   }
 
-  // FUNGSI DINAMIS UNTUK NOTIFIKASI APP
+  // ===========================================================================
+  // 1. FUNGSI UNTUK FRONTEND (GET & READ NOTIFIKASI DARI TABEL)
+  // ===========================================================================
+
   async getAppNotifications(userId: string) {
-    // 1. Ambil Tagihan (Invoice) yang UNPAID
-    const invoices = await this.prisma.invoice.findMany({
-      where: { userId, status: 'UNPAID' },
-      include: { package: true },
+    return this.prisma.notification.findMany({
+      where: { userId },
       orderBy: { createdAt: 'desc' },
+      take: 50, // Batasi 50 notif terbaru agar ringan
     });
+  }
 
-    // 2. Ambil Balasan Tiket (TicketReply) dari Admin
-    const adminReplies = await this.prisma.ticketReply.findMany({
-      where: {
-        ticket: { userId },
-        isFromAdmin: true, // Sesuai kolom di schema kamu
+  async markAsRead(id: string, userId: string) {
+    const notif = await this.prisma.notification.findUnique({ where: { id } });
+    if (!notif) throw new NotFoundException('Notifikasi tidak ditemukan');
+    
+    // Keamanan: Pastikan user hanya bisa membaca notifikasinya sendiri
+    if (notif.userId !== userId) {
+      throw new ForbiddenException('Anda tidak berhak membaca notifikasi ini');
+    }
+
+    return this.prisma.notification.update({
+      where: { id },
+      data: {
+        isRead: true,
+        readAt: new Date(),
       },
-      include: { ticket: true },
-      take: 5,
-      orderBy: { createdAt: 'desc' },
     });
-
-    // 3. Mapping data Invoice ke format Notifikasi
-    const invoiceNotifs = invoices.map((inv) => ({
-      id: `inv-${inv.id}`,
-      title: inv.penaltyAmount > 0 ? 'Peringatan Jatuh Tempo' : 'Tagihan Baru Terbit',
-      message: inv.penaltyAmount > 0 
-        ? `Tagihan ${inv.invoiceNumber} sudah lewat jatuh tempo. Denda Rp ${inv.penaltyAmount.toLocaleString()} ditambahkan.`
-        : `Tagihan ${inv.invoiceNumber} sebesar Rp ${inv.totalAmount.toLocaleString()} sudah tersedia.`,
-      type: inv.penaltyAmount > 0 ? 'WARNING' : 'BILLING',
-      createdAt: inv.createdAt,
-      isRead: false,
-    }));
-
-    // 4. Mapping data TicketReply ke format Notifikasi
-    const chatNotifs = adminReplies.map((reply) => ({
-      id: `reply-${reply.id}`,
-      title: 'Pesan Baru dari Admin',
-      message: reply.message.length > 50 ? `${reply.message.substring(0, 50)}...` : reply.message,
-      type: 'INFO',
-      createdAt: reply.createdAt,
-      isRead: false,
-    }));
-
-    // 5. Gabungkan dan Urutkan berdasarkan tanggal terbaru
-    return [...invoiceNotifs, ...chatNotifs].sort(
-      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
-    );
   }
 
-  // Fungsi placeholder
-  async markAsRead(id: string) {
-    return { status: 'success' };
+  // ===========================================================================
+  // 2. FUNGSI SAKTI UNTUK MEMBUAT NOTIFIKASI (Dipakai oleh service lain)
+  // ===========================================================================
+
+  async createNotification(data: {
+    userId: string;
+    type: NotificationType;
+    title: string;
+    message: string;
+    metadata?: any;
+  }) {
+    return this.prisma.notification.create({
+      data: {
+        userId: data.userId,
+        type: data.type,
+        title: data.title,
+        message: data.message,
+        metadata: data.metadata || {},
+      },
+    });
   }
+
+  // ===========================================================================
+  // 3. FUNGSI EMAIL BAWAAN (TIDAK DIUBAH)
+  // ===========================================================================
 
   async sendOtpEmail(email: string, code: string, name: string) {
     await this.transporter.sendMail({
@@ -84,96 +88,96 @@ export class NotificationsService {
   }
 
   async sendActivationEmail(email: string, name: string, activationLink: string) {
-  await this.transporter.sendMail({
-    from: `"WiFi Management" <${process.env.GMAIL_USER}>`,
-    to: email,
-    subject: 'Aktifkan Akun WiFi Kamu',
-    html: `
-      <h2>Halo ${name}! 🎉</h2>
-      <p>Pendaftaran kamu telah disetujui!</p>
-      <p>Klik tombol di bawah untuk mengaktifkan akun dan membuat password:</p>
-      <a href="${activationLink}" 
-         style="background:#2563eb;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;margin:16px 0">
-        Aktifkan Akun
-      </a>
-      <p>Link berlaku <strong>7 hari</strong>.</p>
-      <p>Jika kamu tidak merasa mendaftar, abaikan email ini.</p>
-    `,
-  })
-}
-async sendInvoiceEmail(
-  email: string,
-  name: string,
-  invoiceNumber: string,
-  amount: number,
-  dueDate: Date,
-) {
-  const formattedAmount = new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-  }).format(amount)
+    await this.transporter.sendMail({
+      from: `"WiFi Management" <${process.env.GMAIL_USER}>`,
+      to: email,
+      subject: 'Aktifkan Akun WiFi Kamu',
+      html: `
+        <h2>Halo ${name}! 🎉</h2>
+        <p>Pendaftaran kamu telah disetujui!</p>
+        <p>Klik tombol di bawah untuk mengaktifkan akun dan membuat password:</p>
+        <a href="${activationLink}" 
+           style="background:#2563eb;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;margin:16px 0">
+          Aktifkan Akun
+        </a>
+        <p>Link berlaku <strong>7 hari</strong>.</p>
+        <p>Jika kamu tidak merasa mendaftar, abaikan email ini.</p>
+      `,
+    })
+  }
 
-  const formattedDate = new Intl.DateTimeFormat('id-ID', {
-    dateStyle: 'long',
-  }).format(dueDate)
+  async sendInvoiceEmail(
+    email: string,
+    name: string,
+    invoiceNumber: string,
+    amount: number,
+    dueDate: Date,
+  ) {
+    const formattedAmount = new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+    }).format(amount)
 
-  await this.transporter.sendMail({
-    from: `"WiFi Management" <${process.env.GMAIL_USER}>`,
-    to: email,
-    subject: `Tagihan WiFi ${invoiceNumber}`,
-    html: `
-      <h2>Halo ${name}!</h2>
-      <p>Tagihan WiFi bulan ini sudah tersedia.</p>
-      <table style="border-collapse:collapse;width:100%;max-width:400px">
-        <tr>
-          <td style="padding:8px;border:1px solid #e5e7eb">Nomor Invoice</td>
-          <td style="padding:8px;border:1px solid #e5e7eb"><strong>${invoiceNumber}</strong></td>
-        </tr>
-        <tr>
-          <td style="padding:8px;border:1px solid #e5e7eb">Total Tagihan</td>
-          <td style="padding:8px;border:1px solid #e5e7eb"><strong>${formattedAmount}</strong></td>
-        </tr>
-        <tr>
-          <td style="padding:8px;border:1px solid #e5e7eb">Jatuh Tempo</td>
-          <td style="padding:8px;border:1px solid #e5e7eb"><strong>${formattedDate}</strong></td>
-        </tr>
-      </table>
-      <p style="margin-top:16px">Segera lakukan pembayaran sebelum jatuh tempo untuk menghindari denda.</p>
-    `,
-  })
-}
+    const formattedDate = new Intl.DateTimeFormat('id-ID', {
+      dateStyle: 'long',
+    }).format(dueDate)
 
-async sendPaymentConfirmationEmail(
-  email: string,
-  name: string,
-  paymentCode: string,
-  amount: number,
-) {
-  const formattedAmount = new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-  }).format(amount)
+    await this.transporter.sendMail({
+      from: `"WiFi Management" <${process.env.GMAIL_USER}>`,
+      to: email,
+      subject: `Tagihan WiFi ${invoiceNumber}`,
+      html: `
+        <h2>Halo ${name}!</h2>
+        <p>Tagihan WiFi bulan ini sudah tersedia.</p>
+        <table style="border-collapse:collapse;width:100%;max-width:400px">
+          <tr>
+            <td style="padding:8px;border:1px solid #e5e7eb">Nomor Invoice</td>
+            <td style="padding:8px;border:1px solid #e5e7eb"><strong>${invoiceNumber}</strong></td>
+          </tr>
+          <tr>
+            <td style="padding:8px;border:1px solid #e5e7eb">Total Tagihan</td>
+            <td style="padding:8px;border:1px solid #e5e7eb"><strong>${formattedAmount}</strong></td>
+          </tr>
+          <tr>
+            <td style="padding:8px;border:1px solid #e5e7eb">Jatuh Tempo</td>
+            <td style="padding:8px;border:1px solid #e5e7eb"><strong>${formattedDate}</strong></td>
+          </tr>
+        </table>
+        <p style="margin-top:16px">Segera lakukan pembayaran sebelum jatuh tempo untuk menghindari denda.</p>
+      `,
+    })
+  }
 
-  await this.transporter.sendMail({
-    from: `"WiFi Management" <${process.env.GMAIL_USER}>`,
-    to: email,
-    subject: `Pembayaran ${paymentCode} Berhasil`,
-    html: `
-      <h2>Halo ${name}! 🎉</h2>
-      <p>Pembayaran kamu telah dikonfirmasi!</p>
-      <table style="border-collapse:collapse;width:100%;max-width:400px">
-        <tr>
-          <td style="padding:8px;border:1px solid #e5e7eb">Kode Pembayaran</td>
-          <td style="padding:8px;border:1px solid #e5e7eb"><strong>${paymentCode}</strong></td>
-        </tr>
-        <tr>
-          <td style="padding:8px;border:1px solid #e5e7eb">Jumlah</td>
-          <td style="padding:8px;border:1px solid #e5e7eb"><strong>${formattedAmount}</strong></td>
-        </tr>
-      </table>
-      <p style="margin-top:16px;color:#16a34a">✅ Internet kamu sudah aktif kembali!</p>
-    `,
-  })
-}
+  async sendPaymentConfirmationEmail(
+    email: string,
+    name: string,
+    paymentCode: string,
+    amount: number,
+  ) {
+    const formattedAmount = new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+    }).format(amount)
 
+    await this.transporter.sendMail({
+      from: `"WiFi Management" <${process.env.GMAIL_USER}>`,
+      to: email,
+      subject: `Pembayaran ${paymentCode} Berhasil`,
+      html: `
+        <h2>Halo ${name}! 🎉</h2>
+        <p>Pembayaran kamu telah dikonfirmasi!</p>
+        <table style="border-collapse:collapse;width:100%;max-width:400px">
+          <tr>
+            <td style="padding:8px;border:1px solid #e5e7eb">Kode Pembayaran</td>
+            <td style="padding:8px;border:1px solid #e5e7eb"><strong>${paymentCode}</strong></td>
+          </tr>
+          <tr>
+            <td style="padding:8px;border:1px solid #e5e7eb">Jumlah</td>
+            <td style="padding:8px;border:1px solid #e5e7eb"><strong>${formattedAmount}</strong></td>
+          </tr>
+        </table>
+        <p style="margin-top:16px;color:#16a34a">✅ Internet kamu sudah aktif kembali!</p>
+      `,
+    })
+  }
 }
