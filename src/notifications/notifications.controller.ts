@@ -17,8 +17,9 @@ export class NotificationsController {
   }
 
   @Patch(':id/read')
-  async markAsRead(@Param('id') id: string) {
-    const data = await this.notificationsService.markAsRead(id);
+  async markAsRead(@Param('id') id: string, @Request() req: any) {
+    const userId = req.user.id;
+    const data = await this.notificationsService.markAsRead(id, userId);
     return { data };
   }
 }
