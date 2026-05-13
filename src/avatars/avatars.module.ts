@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { UploadController } from './upload.controller';
+import { AvatarsController } from './avatars.controller';
 import { MulterModule } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer'; // Pake memory biar simple
 
@@ -9,6 +9,6 @@ import { memoryStorage } from 'multer'; // Pake memory biar simple
       storage: memoryStorage(), // File disimpen di RAM sementara
     }),
   ],
-  controllers: [UploadController],
+  controllers: [AvatarsController],
 })
-export class UploadModule {}
+export class AvatarsModule {}

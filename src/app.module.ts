@@ -11,7 +11,7 @@ import { BillingModule } from './billing/billing.module'
 import { PaymentsModule } from './payments/payments.module'
 import { TicketsModule } from './tickets/tickets.module'
 import { AdminNotificationsModule } from './admin-notifications/admin-notifications.module'
-import { UploadModule } from './upload/upload.module' 
+import { AvatarsModule } from './avatars/avatars.module' 
 
 @Module({
   imports: [
@@ -37,7 +37,7 @@ import { UploadModule } from './upload/upload.module'
     PaymentsModule,
     TicketsModule,
     AdminNotificationsModule,
-    UploadModule,
+    AvatarsModule,
   ],
   providers: [
     {

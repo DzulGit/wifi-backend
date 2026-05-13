@@ -3,8 +3,8 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Storage } from '@google-cloud/storage';
 import { extname } from 'path';
 
-@Controller('upload')
-export class UploadController {
+@Controller('avatars')
+export class AvatarsController {
   // Inisialisasi GCS
   private storage = new Storage();
   private bucketName = 'wifi-storage-cakrana'; // SESUAI SCREENSHOT LU
