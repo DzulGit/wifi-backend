@@ -7,7 +7,7 @@ import { extname } from 'path';
 export class AvatarsController {
   // Inisialisasi GCS
   private storage = new Storage();
-  private bucketName = 'wifi-storage-cakrana'; // SESUAI SCREENSHOT LU
+  private bucketName = 'wifi-storage-cakrana'; 
 
   // FUNGSI UTAMA (REUSABLE)
   private async uploadToGcs(file: Express.Multer.File, folder: string): Promise<string> {
