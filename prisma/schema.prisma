@@ -399,6 +399,34 @@ model LoginLog {
 }
 
 // ============================================================
+// ADMIN NOTIFICATIONS (PERSISTED)
+// ============================================================
+
+enum AdminNotificationCategory {
+  FINANCE
+  SUPPORT
+  SYSTEM
+  ACCOUNT
+  BILLING
+}
+
+model AdminNotification {
+  id          String                    @id @default(cuid())
+  title       String
+  message     String
+  category    AdminNotificationCategory
+  link        String?
+  isUrgent    Boolean                   @default(false)
+  isRead      Boolean                   @default(false)
+  metadata    Json?
+  createdAt   DateTime                  @default(now())
+
+  @@index([category])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+// ============================================================
 // SYSTEM SETTINGS
 // ============================================================
 

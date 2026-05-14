@@ -1,12 +1,15 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
-import { NotificationsService } from '../notifications/notifications.service' // <-- IMPORT INI
+import { NotificationsService } from '../notifications/notifications.service'
+import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service'
+import { AdminNotificationHelper } from '../admin-notifications/admin-notification.helper'
 
 @Injectable()
 export class TicketsService {
   constructor(
     private prisma: PrismaService,
-    private notifications: NotificationsService // <-- INJECT DI SINI
+    private notifications: NotificationsService,
+    private adminNotifications: AdminNotificationsService,
   ) {}
 
   // ── Generate ticket number with retry logic ───────────────
@@ -46,7 +49,7 @@ export class TicketsService {
 
     const ticketNumber = await this.generateTicketNumber()
 
-    return this.prisma.ticket.create({
+    const ticket = await this.prisma.ticket.create({
       data: {
         ticketNumber,
         userId,
@@ -58,6 +61,18 @@ export class TicketsService {
         status: 'OPEN',
       },
     })
+
+    // 👇 ADMIN NOTIFICATION 👇
+    await AdminNotificationHelper.ticketCreated(this.adminNotifications, {
+      userName: user.fullName,
+      ticketNumber: ticket.ticketNumber,
+      title: ticket.title,
+      priority: ticket.priority,
+      ticketId: ticket.id,
+    });
+    // 👆 SELESAI 👆
+
+    return ticket
   }
 
   // ── Get all tickets ───────────────────────────────────────
@@ -153,11 +168,24 @@ export class TicketsService {
     if (data.isFromAdmin) {
       await this.notifications.createNotification({
         userId: ticket.userId,
-        type: 'INFO' as any, // Ganti 'INFO' dengan enum yang ada di schema.prisma kamu jika merah (misal: 'TICKET_REPLY')
+        type: 'TICKET_REPLIED' as any,
         title: 'Tiket Dibalas Admin 🎧',
         message: `Admin telah membalas tiket pengaduan kamu (#${ticket.ticketNumber}). Silakan cek balasan terbaru.`,
         metadata: { ticketId: ticket.id }
       });
+
+      // 👇 ADMIN NOTIFICATION (INFO: Someone replied to ticket) 👇
+      const admin = await this.prisma.admin.findUnique({
+        where: { id: data.adminId || '' },
+      })
+      if (admin) {
+        await AdminNotificationHelper.ticketReplied(this.adminNotifications, {
+          ticketNumber: ticket.ticketNumber,
+          replierName: admin.fullName,
+          ticketId: ticket.id,
+        });
+      }
+      // 👆 SELESAI 👆
     }
     // 👆 SELESAI 👆
 

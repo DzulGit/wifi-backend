@@ -1,12 +1,15 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { NotificationsService } from '../notifications/notifications.service'
+import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service'
+import { AdminNotificationHelper } from '../admin-notifications/admin-notification.helper'
 
 @Injectable()
 export class BillingService {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private adminNotifications: AdminNotificationsService,
   ) {}
 
   // ── Generate invoice number with retry logic ──────────────
@@ -92,6 +95,16 @@ export class BillingService {
       title: 'Tagihan Baru Terbit 📄',
       message: `Tagihan internet kamu sebesar ${formattedAmount} sudah keluar. Yuk segera dibayar sebelum jatuh tempo!`,
       metadata: { invoiceId: invoice.id }
+    });
+
+    // 👇 ADMIN NOTIFICATION 👇
+    await AdminNotificationHelper.invoiceCreated(this.adminNotifications, {
+      invoiceNumber: invoice.invoiceNumber,
+      userName: invoice.user.fullName,
+      customerCode: invoice.user.customerCode,
+      amount: invoice.totalAmount,
+      dueDate: invoice.dueDate,
+      invoiceId: invoice.id,
     });
     // 👆 SELESAI 👆
 
@@ -217,6 +230,10 @@ export class BillingService {
     })
 
     // 👇 2. NOTIFIKASI DENDA DITANAM DI SINI 👇
+    const user = await this.prisma.user.findUnique({
+      where: { id: updatedInvoice.userId },
+    })
+
     await this.notifications.createNotification({
       userId: updatedInvoice.userId,
       type: 'INVOICE_REMINDER', 
@@ -224,6 +241,18 @@ export class BillingService {
       message: `Tagihan internet kamu telah melewati batas waktu dan dikenakan denda. Total tagihan saat ini: Rp ${updatedInvoice.totalAmount.toLocaleString('id-ID')}.`,
       metadata: { invoiceId: updatedInvoice.id }
     });
+
+    // 👇 ADMIN NOTIFICATION 👇
+    if (user) {
+      await AdminNotificationHelper.invoiceOverdue(this.adminNotifications, {
+        invoiceNumber: updatedInvoice.invoiceNumber,
+        userName: user.fullName,
+        customerCode: user.customerCode,
+        totalAmount: updatedInvoice.totalAmount,
+        daysOverdue: Math.floor((Date.now() - updatedInvoice.dueDate.getTime()) / (1000 * 60 * 60 * 24)),
+        invoiceId: updatedInvoice.id,
+      });
+    }
     // 👆 SELESAI 👆
 
     return updatedInvoice

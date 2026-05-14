@@ -1,12 +1,15 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { NotificationsService } from '../notifications/notifications.service'
+import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service'
+import { AdminNotificationHelper } from '../admin-notifications/admin-notification.helper'
 
 @Injectable()
 export class PaymentsService {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private adminNotifications: AdminNotificationsService,
   ) {}
 
   // ── Generate payment code with retry logic ────────────────────────────────
@@ -89,10 +92,21 @@ export class PaymentsService {
     // 👇 1. NOTIFIKASI SUBMIT DITANAM DI SINI 👇
     await this.notifications.createNotification({
       userId: userId,
-      type: 'PAYMENT_RECEIVED', // Sesuai enum di schema
+      type: 'PAYMENT_RECEIVED',
       title: 'Pembayaran Sedang Diproses ⏳',
       message: `Terima kasih! Bukti pembayaran untuk tagihan ${invoice.invoiceNumber} telah kami terima dan sedang menunggu validasi admin.`,
       metadata: { paymentId: payment.id, invoiceId: invoice.id }
+    });
+
+    // 👇 ADMIN NOTIFICATION 👇
+    await AdminNotificationHelper.paymentReceived(this.adminNotifications, {
+      userName: invoice.user.fullName,
+      customerCode: invoice.user.customerCode,
+      invoiceNumber: invoice.invoiceNumber,
+      paymentCode: payment.paymentCode,
+      amount: payment.amount,
+      paymentId: payment.id,
+      invoiceId: invoice.id,
     });
     // 👆 SELESAI 👆
 
@@ -144,13 +158,31 @@ export class PaymentsService {
       }
     })
 
+    // Re-fetch payment with user data for notification
+    const updatedPayment = await this.prisma.payment.findUnique({
+      where: { id },
+      include: { invoice: true, user: true, processedBy: { select: { fullName: true } } },
+    })
+
+    if (!updatedPayment) throw new NotFoundException('Payment not found after update')
+
     // 👇 2. NOTIFIKASI ACC DITANAM DI SINI 👇
     await this.notifications.createNotification({
       userId: payment.userId,
-      type: 'PAYMENT_APPROVED', // Sesuai enum di schema
+      type: 'PAYMENT_APPROVED',
       title: 'Pembayaran Berhasil! 🎉',
       message: `Hore! Pembayaran untuk tagihan ${payment.invoice.invoiceNumber} sudah divalidasi. Tagihan kamu sudah lunas.`,
       metadata: { paymentId: payment.id, invoiceId: payment.invoiceId }
+    });
+
+    // 👇 ADMIN NOTIFICATION 👇
+    await AdminNotificationHelper.paymentApproved(this.adminNotifications, {
+      userName: updatedPayment.user!.fullName,
+      customerCode: updatedPayment.user!.customerCode,
+      invoiceNumber: updatedPayment.invoice.invoiceNumber,
+      amount: updatedPayment.amount,
+      paymentId: updatedPayment.id,
+      invoiceId: updatedPayment.invoiceId,
     });
     // 👆 SELESAI 👆
 
@@ -175,7 +207,7 @@ export class PaymentsService {
 
     const payment = await this.prisma.payment.findUnique({
       where: { id },
-      include: { invoice: true },
+      include: { invoice: true, user: true },
     })
 
     if (!payment) throw new NotFoundException('Pembayaran tidak ditemukan')
@@ -202,10 +234,20 @@ export class PaymentsService {
     // 👇 3. NOTIFIKASI TOLAK DITANAM DI SINI 👇
     await this.notifications.createNotification({
       userId: payment.userId,
-      type: 'PAYMENT_REJECTED', // Sesuai enum di schema
+      type: 'PAYMENT_REJECTED',
       title: 'Pembayaran Ditolak ❌',
       message: `Maaf, bukti pembayaran untuk tagihan ${payment.invoice.invoiceNumber} ditolak admin dengan alasan: "${reason.trim()}". Silakan upload ulang bukti yang benar.`,
       metadata: { paymentId: payment.id, invoiceId: payment.invoiceId }
+    });
+
+    // 👇 ADMIN NOTIFICATION 👇
+    await AdminNotificationHelper.paymentRejected(this.adminNotifications, {
+      userName: payment.user.fullName,
+      customerCode: payment.user.customerCode,
+      invoiceNumber: payment.invoice.invoiceNumber,
+      reason: reason.trim(),
+      paymentId: payment.id,
+      invoiceId: payment.invoiceId,
     });
     // 👆 SELESAI 👆
 

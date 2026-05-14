@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { NotificationsService } from '../notifications/notifications.service'
+import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service'
+import { AdminNotificationHelper } from '../admin-notifications/admin-notification.helper'
 import { randomBytes } from 'crypto'
 
 @Injectable()
@@ -12,6 +14,7 @@ export class RegistrationsService {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private adminNotifications: AdminNotificationsService,
   ) {}
 
   // ── Submit pendaftaran (dari landing page — public endpoint) ──────────────
@@ -71,6 +74,17 @@ export class RegistrationsService {
       data: { ...data, status: 'PENDING' },
       include: { approvedBy: true },
     })
+
+    // 👇 ADMIN NOTIFICATION 👇
+    if (pkg) {
+      await AdminNotificationHelper.registrationCreated(this.adminNotifications, {
+        fullName: registration.fullName,
+        phone: registration.phone,
+        packageName: pkg.name,
+        registrationId: registration.id,
+      });
+    }
+    // 👆 SELESAI 👆
 
     return {
       message: 'Pendaftaran berhasil! Admin akan menghubungi kamu segera.',

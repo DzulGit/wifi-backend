@@ -3,13 +3,16 @@ import { PrismaService } from '../prisma/prisma.service'
 import { UserStatus } from '@prisma/client'
 import * as bcrypt from 'bcrypt'
 import { randomBytes } from 'crypto'
-import { NotificationsService } from '../notifications/notifications.service' // <-- 1. IMPORT INI
+import { NotificationsService } from '../notifications/notifications.service'
+import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service'
+import { AdminNotificationHelper } from '../admin-notifications/admin-notification.helper'
 
 @Injectable()
 export class UsersService {
   constructor(
     private prisma: PrismaService,
-    private notifications: NotificationsService // <-- 2. INJECT DI SINI
+    private notifications: NotificationsService,
+    private adminNotifications: AdminNotificationsService,
   ) {}
 
   // ── Generate customer code ────────────────────────────────
@@ -146,10 +149,18 @@ export class UsersService {
     if (status === 'ACTIVE') {
       await this.notifications.createNotification({
         userId: id,
-        type: 'ACCOUNT_ACTIVATED' as any, // Memakai casting as any biar nggak rewel di TypeScript
+        type: 'ACCOUNT_ACTIVATED' as any,
         title: 'Akun Diaktifkan ✅',
         message: 'Selamat! Akun internet kamu sudah aktif dan bisa digunakan kembali.',
       });
+
+      // 👇 ADMIN NOTIFICATION 👇
+      await AdminNotificationHelper.accountActivated(this.adminNotifications, {
+        userName: updated.fullName,
+        customerCode: updated.customerCode,
+        userId: updated.id,
+      });
+      // 👆 SELESAI 👆
     } else if (status === 'SUSPENDED') {
       await this.notifications.createNotification({
         userId: id,
@@ -157,6 +168,15 @@ export class UsersService {
         title: 'Layanan Terisolir ⚠️',
         message: 'Mohon maaf, layanan internet kamu saat ini ditangguhkan sementara. Silakan lunasi tagihan atau hubungi admin.',
       });
+
+      // 👇 ADMIN NOTIFICATION 👇
+      await AdminNotificationHelper.accountSuspended(this.adminNotifications, {
+        userName: updated.fullName,
+        customerCode: updated.customerCode,
+        reason: 'Overdue invoice or manual suspension',
+        userId: updated.id,
+      });
+      // 👆 SELESAI 👆
     }
     // 👆 SELESAI 👆
 

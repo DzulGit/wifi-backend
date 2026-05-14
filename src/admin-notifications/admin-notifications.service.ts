@@ -1,130 +1,217 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { AdminNotificationCategory } from '@prisma/client'
 
-export interface NotificationItem {
+export interface AdminNotificationItem {
   id: string
-  type: 'PAYMENT' | 'REGISTRATION' | 'TICKET' | 'INVOICE'
   title: string
   message: string
-  link: string
-  createdAt: Date
+  category: AdminNotificationCategory
+  link: string | null
   isUrgent: boolean
+  isRead: boolean
+  metadata: any
+  createdAt: Date
+}
+
+export interface GetAllParams {
+  category?: AdminNotificationCategory
+  isRead?: boolean
+  page?: number
+  limit?: number
 }
 
 @Injectable()
 export class AdminNotificationsService {
   constructor(private prisma: PrismaService) {}
 
-  async getAll(): Promise<{ notifications: NotificationItem[]; totalUnread: number }> {
-    const since = new Date()
-    since.setDate(since.getDate() - 7) // Ambil notif 7 hari terakhir
-
-    const [pendingPayments, pendingRegistrations, openTickets, overdueInvoices] =
-      await Promise.all([
-        // Pembayaran pending (butuh approve)
-        this.prisma.payment.findMany({
-          where: { status: 'PENDING', createdAt: { gte: since } },
-          orderBy: { createdAt: 'desc' },
-          take: 20,
-          include: {
-            user: { select: { fullName: true, customerCode: true } },
-            invoice: { select: { invoiceNumber: true } },
-          },
-        }),
-
-        // Pendaftaran baru pending
-        this.prisma.registration.findMany({
-          where: { status: 'PENDING', createdAt: { gte: since } },
-          orderBy: { createdAt: 'desc' },
-          take: 20,
-        }),
-
-        // Tiket open yang belum dibalas
-        this.prisma.ticket.findMany({
-          where: { status: 'OPEN', createdAt: { gte: since } },
-          orderBy: { createdAt: 'desc' },
-          take: 20,
-          include: {
-            user: { select: { fullName: true, customerCode: true } },
-          },
-        }),
-
-        // Tagihan overdue
-        this.prisma.invoice.findMany({
-          where: { status: 'OVERDUE', createdAt: { gte: since } },
-          orderBy: { createdAt: 'desc' },
-          take: 20,
-          include: {
-            user: { select: { fullName: true, customerCode: true } },
-          },
-        }),
-      ])
-
-    const notifications: NotificationItem[] = [
-      ...pendingPayments.map((p) => ({
-        id: `pay-${p.id}`,
-        type: 'PAYMENT' as const,
-        title: 'Pembayaran Masuk',
-        message: `${p.user.fullName} (${p.user.customerCode}) kirim bukti bayar ${p.invoice.invoiceNumber}`,
-        link: '/admin/pembayaran',
-        createdAt: p.createdAt,
-        isUrgent: false,
-      })),
-
-      ...pendingRegistrations.map((r) => ({
-        id: `reg-${r.id}`,
-        type: 'REGISTRATION' as const,
-        title: 'Pendaftar Baru',
-        message: `${r.fullName} (${r.phone}) mendaftar layanan WiFi`,
-        link: '/admin/pendaftar',
-        createdAt: r.createdAt,
-        isUrgent: false,
-      })),
-
-      ...openTickets.map((t) => ({
-        id: `tkt-${t.id}`,
-        type: 'TICKET' as const,
-        title: 'Tiket Baru',
-        message: `${t.user.fullName}: "${t.title}"`,
-        link: '/admin/tiket',
-        createdAt: t.createdAt,
-        isUrgent: t.priority === 'HIGH' || t.priority === 'CRITICAL',
-      })),
-
-      ...overdueInvoices.map((inv) => ({
-        id: `inv-${inv.id}`,
-        type: 'INVOICE' as const,
-        title: 'Tagihan Overdue',
-        message: `${inv.user.fullName} (${inv.user.customerCode}) tagihan jatuh tempo`,
-        link: '/admin/tagihan',
-        createdAt: inv.createdAt,
-        isUrgent: true,
-      })),
-    ]
-
-    // Sort by newest
-    notifications.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-
-    return {
-      notifications: notifications.slice(0, 30),
-      totalUnread: notifications.length,
-    }
+  /**
+   * Create an admin notification (persisted to database)
+   * Called by business logic services when events occur
+   */
+  async create(data: {
+    title: string
+    message: string
+    category: AdminNotificationCategory
+    link?: string
+    isUrgent?: boolean
+    metadata?: Record<string, any>
+  }): Promise<AdminNotificationItem> {
+    return this.prisma.adminNotification.create({
+      data: {
+        title: data.title,
+        message: data.message,
+        category: data.category,
+        link: data.link,
+        isUrgent: data.isUrgent ?? false,
+        metadata: data.metadata,
+      },
+    })
   }
 
-  async getSummary() {
-    const [payments, registrations, tickets, invoices] = await Promise.all([
-      this.prisma.payment.count({ where: { status: 'PENDING' } }),
-      this.prisma.registration.count({ where: { status: 'PENDING' } }),
-      this.prisma.ticket.count({ where: { status: 'OPEN' } }),
-      this.prisma.invoice.count({ where: { status: 'OVERDUE' } }),
+  /**
+   * Get all admin notifications with filtering
+   * Supports category filtering, pagination, read status
+   */
+  async getAll(params: GetAllParams = {}): Promise<{
+    notifications: AdminNotificationItem[]
+    meta: {
+      total: number
+      page: number
+      limit: number
+      totalPages: number
+      unreadCount: number
+    }
+  }> {
+    const { category, isRead, page = 1, limit = 20 } = params
+    const skip = (page - 1) * limit
+
+    const where: any = {}
+    if (category) where.category = category
+    if (isRead !== undefined) where.isRead = isRead
+
+    const [notifications, total, unreadCount] = await Promise.all([
+      this.prisma.adminNotification.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.adminNotification.count({ where }),
+      this.prisma.adminNotification.count({ where: { isRead: false } }),
     ])
 
     return {
-      payments,
-      registrations,
-      tickets,
-      invoices,
-      total: payments + registrations + tickets + invoices,
+      notifications,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        unreadCount,
+      },
     }
+  }
+
+  /**
+   * Get notifications by category
+   */
+  async getByCategory(
+    category: AdminNotificationCategory,
+    page = 1,
+    limit = 20,
+  ): Promise<{
+    notifications: AdminNotificationItem[]
+    meta: { total: number; page: number; limit: number; totalPages: number }
+  }> {
+    return this.getAll({ category, page, limit })
+  }
+
+  /**
+   * Get unread notifications only
+   */
+  async getUnread(page = 1, limit = 20): Promise<{
+    notifications: AdminNotificationItem[]
+    meta: { total: number; page: number; limit: number; totalPages: number; unreadCount: number }
+  }> {
+    return this.getAll({ isRead: false, page, limit })
+  }
+
+  /**
+   * Mark a notification as read
+   */
+  async markAsRead(id: string): Promise<AdminNotificationItem> {
+    return this.prisma.adminNotification.update({
+      where: { id },
+      data: { isRead: true },
+    })
+  }
+
+  /**
+   * Mark multiple notifications as read
+   */
+  async markManyAsRead(ids: string[]): Promise<{ count: number }> {
+    return this.prisma.adminNotification.updateMany({
+      where: { id: { in: ids } },
+      data: { isRead: true },
+    })
+  }
+
+  /**
+   * Mark all unread notifications as read
+   */
+  async markAllAsRead(): Promise<{ count: number }> {
+    return this.prisma.adminNotification.updateMany({
+      where: { isRead: false },
+      data: { isRead: true },
+    })
+  }
+
+  /**
+   * Delete a notification
+   */
+  async delete(id: string): Promise<void> {
+    await this.prisma.adminNotification.delete({
+      where: { id },
+    })
+  }
+
+  /**
+   * Delete multiple notifications
+   */
+  async deleteMany(ids: string[]): Promise<{ count: number }> {
+    return this.prisma.adminNotification.deleteMany({
+      where: { id: { in: ids } },
+    })
+  }
+
+  /**
+   * Get summary stats
+   */
+  async getSummary(): Promise<{
+    totalUnread: number
+    byCategory: Record<AdminNotificationCategory, number>
+    urgentUnread: number
+  }> {
+    const [unreadCount, urgentCount] = await Promise.all([
+      this.prisma.adminNotification.count({ where: { isRead: false } }),
+      this.prisma.adminNotification.count({
+        where: { isRead: false, isUrgent: true },
+      }),
+    ])
+
+    const categories = ['FINANCE', 'SUPPORT', 'SYSTEM', 'ACCOUNT', 'BILLING'] as const
+    const byCategoryPromises = categories.map((cat) =>
+      this.prisma.adminNotification.count({
+        where: { category: cat, isRead: false },
+      }),
+    )
+
+    const byCategoryCounts = await Promise.all(byCategoryPromises)
+    const byCategory = Object.fromEntries(
+      categories.map((cat, idx) => [cat, byCategoryCounts[idx]]),
+    ) as Record<AdminNotificationCategory, number>
+
+    return {
+      totalUnread: unreadCount,
+      byCategory,
+      urgentUnread: urgentCount,
+    }
+  }
+
+  /**
+   * Delete old notifications (older than X days)
+   * For cleanup/archive purposes
+   */
+  async deleteOlderThan(days: number): Promise<{ count: number }> {
+    const cutoffDate = new Date()
+    cutoffDate.setDate(cutoffDate.getDate() - days)
+
+    return this.prisma.adminNotification.deleteMany({
+      where: {
+        createdAt: { lt: cutoffDate },
+        isRead: true, // Only delete read ones to preserve recent activity
+      },
+    })
   }
 }
