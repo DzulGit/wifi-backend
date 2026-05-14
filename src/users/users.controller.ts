@@ -29,6 +29,32 @@ export class UsersController {
     }
   }
 
+  // ─── ENDPOINT REQUEST USER ───────────────────────────────────────
+
+  @Post(':id/request-package')
+  async requestPackageChange(
+    @Param('id') id: string, 
+    @Body('newPackageId') newPackageId: string
+  ) {
+    return this.usersService.requestPackageChange(id, newPackageId);
+  }
+
+  @Post(':id/request-cancel')
+  async requestCancellation(
+    @Param('id') id: string, 
+    @Body('reason') reason: string
+  ) {
+    return this.usersService.requestCancellation(id, reason);
+  }
+
+  @Post(':id/request-move')
+  async requestAddressMove(
+    @Param('id') id: string, 
+    @Body('newAddress') newAddress: string
+  ) {
+    return this.usersService.requestAddressMove(id, newAddress);
+  }
+
   @Get('stats')
   getStats(@Request() req: any) {
     this.requireAdmin(req);

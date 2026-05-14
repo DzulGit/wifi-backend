@@ -15,6 +15,58 @@ export class UsersService {
     private adminNotifications: AdminNotificationsService,
   ) {}
 
+  // ─── FITUR REQUEST USER ──────────────────────────────────────────
+
+  async requestPackageChange(userId: string, newPackageId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const newPkg = await this.prisma.package.findUnique({ where: { id: newPackageId } });
+
+    if (!user || !newPkg) throw new NotFoundException('Data user atau paket tidak ditemukan');
+
+    await this.adminNotifications.create({
+      title: '🔄 Request Ganti Paket',
+      message: `Pelanggan ${user.fullName} (${user.customerCode}) mengajukan pindah ke paket ${newPkg.name}.`,
+      category: 'SYSTEM',
+      link: `/admin/pelanggan/${userId}`,
+      isUrgent: false,
+      metadata: { userId, newPackageId }
+    });
+
+    return { message: 'Request ganti paket berhasil dikirim ke admin' };
+  }
+
+  async requestCancellation(userId: string, reason: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User tidak ditemukan');
+
+    await this.adminNotifications.create({
+      title: '😢 Request Putus Berlangganan',
+      message: `Pelanggan ${user.fullName} (${user.customerCode}) mengajukan putus berlangganan. Alasan: ${reason}`,
+      category: 'SYSTEM',
+      link: `/admin/pelanggan/${userId}`,
+      isUrgent: true,
+      metadata: { userId, reason }
+    });
+
+    return { message: 'Request putus berlangganan berhasil dikirim' };
+  }
+
+  async requestAddressMove(userId: string, newAddress: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User tidak ditemukan');
+
+    await this.adminNotifications.create({
+      title: '🏠 Request Pindah Alamat',
+      message: `Pelanggan ${user.fullName} (${user.customerCode}) mengajukan pindah alamat ke: ${newAddress}`,
+      category: 'SYSTEM',
+      link: `/admin/pelanggan/${userId}`,
+      isUrgent: false,
+      metadata: { userId, newAddress }
+    });
+
+    return { message: 'Request pindah alamat berhasil dikirim' };
+  }
+
   // ── Generate customer code ────────────────────────────────
   private async generateCustomerCode(): Promise<string> {
     const count = await this.prisma.user.count()

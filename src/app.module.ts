@@ -12,9 +12,11 @@ import { PaymentsModule } from './payments/payments.module'
 import { TicketsModule } from './tickets/tickets.module'
 import { AdminNotificationsModule } from './admin-notifications/admin-notifications.module'
 import { AvatarsModule } from './avatars/avatars.module' 
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([
       {
