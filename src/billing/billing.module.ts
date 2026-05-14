@@ -8,7 +8,7 @@ import { BillingScheduler } from './billing.scheduler';
 @Module({
   imports: [NotificationsModule, AdminNotificationsModule],
   controllers: [BillingController],
-  providers: [BillingService],
-  exports: [BillingService, BillingScheduler],
+  providers: [BillingService, BillingScheduler],
+  exports: [BillingService],
 })
 export class BillingModule {}
