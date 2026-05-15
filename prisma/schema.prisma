@@ -368,6 +368,7 @@ model Notification {
   isSent      Boolean             @default(false)
   sentAt      DateTime?
   readAt      DateTime?
+  isDeleted   Boolean             @default(false)
   metadata    Json?               // data tambahan (invoiceId, dll)
 
   createdAt   DateTime            @default(now())
@@ -375,6 +376,7 @@ model Notification {
   @@index([userId])
   @@index([isRead])
   @@index([type])
+  @@index([isDeleted])
 }
 
 // ============================================================
