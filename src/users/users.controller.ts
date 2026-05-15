@@ -88,7 +88,10 @@ export class UsersController {
 
   @Get(':id')
   findOne(@Param('id') id: string, @Request() req: any) {
-    this.requireAdmin(req);
+    // FIX: User biasa boleh melihat datanya sendiri, Admin boleh lihat semua
+    if (req.user?.type !== 'admin' && req.user?.id !== id) {
+      throw new ForbiddenException('Akses ditolak. Anda hanya dapat melihat data Anda sendiri.');
+    }
     return this.usersService.findOne(id);
   }
 
@@ -122,13 +125,15 @@ export class UsersController {
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() body: any, @Request() req: any) {
-    this.requireAdmin(req);
+    // FIX: requireAdmin dihapus dari sini agar user bisa masuk ke pengecekan di bawahnya
+    
     if (req.user?.type !== 'admin' && req.user?.id !== id) {
       throw new ForbiddenException(
         'Anda hanya bisa merubah profil Anda sendiri',
       );
     }
 
+    // Jika bukan admin, pastikan field krusial dibuang agar tidak bisa di-hack
     if (req.user?.type !== 'admin') {
       delete body.status; 
       delete body.packageId; 
