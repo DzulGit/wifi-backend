@@ -209,7 +209,7 @@ export class TicketsService {
     if (status === 'RESOLVED' || status === 'CLOSED') {
       await this.notifications.createNotification({
         userId: ticket.userId,
-        type: 'INFO' as any, // Ganti 'INFO' dengan enum yang ada di schema.prisma kamu jika merah
+        type: 'TICKET_REPLIED' as any,
         title: 'Status Pengaduan Diperbarui ✅',
         message: `Tiket pengaduan kamu (#${ticket.ticketNumber}) sekarang berstatus ${status}. Terima kasih telah menghubungi kami.`,
         metadata: { ticketId: ticket.id }

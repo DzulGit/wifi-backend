@@ -13,10 +13,12 @@ import { TicketsModule } from './tickets/tickets.module'
 import { AdminNotificationsModule } from './admin-notifications/admin-notifications.module'
 import { AvatarsModule } from './avatars/avatars.module' 
 import { ScheduleModule } from '@nestjs/schedule';
+import { NotificationsModule } from './notifications/notifications.module'
 
 @Module({
   imports: [
     ScheduleModule.forRoot(),
+    NotificationsModule,
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([
       {

@@ -185,17 +185,7 @@ export class PaymentsService {
       invoiceId: updatedPayment.invoiceId,
     });
     // 👆 SELESAI 👆
-
-    // Send email notification after transaction succeeds
-    if (payment.user.email) {
-      await this.notifications.sendPaymentConfirmationEmail(
-        payment.user.email,
-        payment.user.fullName,
-        payment.paymentCode,
-        payment.amount,
-      )
-    }
-
+    
     return { message: 'Pembayaran diapprove, tagihan lunas' }
   }
 

@@ -32,7 +32,7 @@ export class NotificationsService {
   async markAsRead(id: string, userId: string) {
     const notif = await this.prisma.notification.findUnique({ where: { id } });
     if (!notif) throw new NotFoundException('Notifikasi tidak ditemukan');
-    
+
     // Keamanan: Pastikan user hanya bisa membaca notifikasinya sendiri
     if (notif.userId !== userId) {
       throw new ForbiddenException('Anda tidak berhak membaca notifikasi ini');
@@ -74,110 +74,61 @@ export class NotificationsService {
   // ===========================================================================
 
   async sendOtpEmail(email: string, code: string, name: string) {
-    await this.transporter.sendMail({
-      from: `"WiFi Management" <${process.env.GMAIL_USER}>`,
-      to: email,
-      subject: 'Kode OTP Login Kamu',
-      html: `
-        <h2>Halo ${name}!</h2>
-        <p>Kode OTP kamu adalah:</p>
-        <h1 style="letter-spacing: 8px; color: #2563eb;">${code}</h1>
-        <p>Kode berlaku <strong>5 menit</strong>. Jangan bagikan ke siapapun.</p>
+    try {
+      await this.transporter.sendMail({
+        from: `"CAKRANA WiFi" <${process.env.GMAIL_USER}>`,
+        to: email,
+        subject: `Kode OTP Login Kamu - ${code}`,
+        html: `
+        <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px">
+          <div style="background:#1A1A1A;padding:20px;border-radius:12px;text-align:center;margin-bottom:24px">
+            <h1 style="color:#F5A623;margin:0;letter-spacing:2px">CAKRANA</h1>
+          </div>
+          <h2>Halo, ${name}!</h2>
+          <p>Kode OTP kamu:</p>
+          <div style="background:#F4F4F5;border-radius:12px;padding:24px;text-align:center;margin:20px 0">
+            <p style="margin:0;font-size:40px;font-weight:bold;letter-spacing:12px;color:#1A1A1A">${code}</p>
+          </div>
+          <p style="color:#888;font-size:12px;text-align:center">
+            Berlaku <strong>5 menit</strong>. Jangan bagikan ke siapapun.
+          </p>
+        </div>
       `,
-    })
+      })
+      console.log(`✅ OTP email sent to ${email}`)
+    } catch (error) {
+      console.error(`❌ Failed to send OTP email to ${email}:`, error)
+      // Jangan throw — biar OTP tetap bisa dicek meski email gagal
+    }
   }
 
   async sendActivationEmail(email: string, name: string, activationLink: string) {
-    await this.transporter.sendMail({
-      from: `"WiFi Management" <${process.env.GMAIL_USER}>`,
-      to: email,
-      subject: 'Aktifkan Akun WiFi Kamu',
-      html: `
-        <h2>Halo ${name}! 🎉</h2>
-        <p>Pendaftaran kamu telah disetujui!</p>
-        <p>Klik tombol di bawah untuk mengaktifkan akun dan membuat password:</p>
-        <a href="${activationLink}" 
-           style="background:#2563eb;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;margin:16px 0">
-          Aktifkan Akun
-        </a>
-        <p>Link berlaku <strong>7 hari</strong>.</p>
-        <p>Jika kamu tidak merasa mendaftar, abaikan email ini.</p>
+    try {
+      await this.transporter.sendMail({
+        from: `"CAKRANA WiFi" <${process.env.GMAIL_USER}>`,
+        to: email,
+        subject: 'Aktifkan Akun CAKRANA Kamu',
+        html: `
+        <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px">
+          <div style="background:#1A1A1A;padding:20px;border-radius:12px;text-align:center;margin-bottom:24px">
+            <h1 style="color:#F5A623;margin:0;letter-spacing:2px">CAKRANA</h1>
+          </div>
+          <h2>Selamat datang, ${name}! 🎉</h2>
+          <p>Pendaftaran kamu telah disetujui. Klik tombol di bawah untuk mengaktifkan akun:</p>
+          <div style="text-align:center;margin:28px 0">
+            <a href="${activationLink}"
+              style="background:#F5A623;color:#1A1A1A;padding:14px 32px;border-radius:10px;
+                     text-decoration:none;font-weight:bold;font-size:15px;display:inline-block">
+              Aktifkan Akun →
+            </a>
+          </div>
+          <p style="color:#888;font-size:12px">Link berlaku <strong>7 hari</strong>.</p>
+        </div>
       `,
-    })
-  }
-
-  async sendInvoiceEmail(
-    email: string,
-    name: string,
-    invoiceNumber: string,
-    amount: number,
-    dueDate: Date,
-  ) {
-    const formattedAmount = new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-    }).format(amount)
-
-    const formattedDate = new Intl.DateTimeFormat('id-ID', {
-      dateStyle: 'long',
-    }).format(dueDate)
-
-    await this.transporter.sendMail({
-      from: `"WiFi Management" <${process.env.GMAIL_USER}>`,
-      to: email,
-      subject: `Tagihan WiFi ${invoiceNumber}`,
-      html: `
-        <h2>Halo ${name}!</h2>
-        <p>Tagihan WiFi bulan ini sudah tersedia.</p>
-        <table style="border-collapse:collapse;width:100%;max-width:400px">
-          <tr>
-            <td style="padding:8px;border:1px solid #e5e7eb">Nomor Invoice</td>
-            <td style="padding:8px;border:1px solid #e5e7eb"><strong>${invoiceNumber}</strong></td>
-          </tr>
-          <tr>
-            <td style="padding:8px;border:1px solid #e5e7eb">Total Tagihan</td>
-            <td style="padding:8px;border:1px solid #e5e7eb"><strong>${formattedAmount}</strong></td>
-          </tr>
-          <tr>
-            <td style="padding:8px;border:1px solid #e5e7eb">Jatuh Tempo</td>
-            <td style="padding:8px;border:1px solid #e5e7eb"><strong>${formattedDate}</strong></td>
-          </tr>
-        </table>
-        <p style="margin-top:16px">Segera lakukan pembayaran sebelum jatuh tempo untuk menghindari denda.</p>
-      `,
-    })
-  }
-
-  async sendPaymentConfirmationEmail(
-    email: string,
-    name: string,
-    paymentCode: string,
-    amount: number,
-  ) {
-    const formattedAmount = new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-    }).format(amount)
-
-    await this.transporter.sendMail({
-      from: `"WiFi Management" <${process.env.GMAIL_USER}>`,
-      to: email,
-      subject: `Pembayaran ${paymentCode} Berhasil`,
-      html: `
-        <h2>Halo ${name}! 🎉</h2>
-        <p>Pembayaran kamu telah dikonfirmasi!</p>
-        <table style="border-collapse:collapse;width:100%;max-width:400px">
-          <tr>
-            <td style="padding:8px;border:1px solid #e5e7eb">Kode Pembayaran</td>
-            <td style="padding:8px;border:1px solid #e5e7eb"><strong>${paymentCode}</strong></td>
-          </tr>
-          <tr>
-            <td style="padding:8px;border:1px solid #e5e7eb">Jumlah</td>
-            <td style="padding:8px;border:1px solid #e5e7eb"><strong>${formattedAmount}</strong></td>
-          </tr>
-        </table>
-        <p style="margin-top:16px;color:#16a34a">✅ Internet kamu sudah aktif kembali!</p>
-      `,
-    })
+      })
+      console.log(`✅ Activation email sent to ${email}`)
+    } catch (error) {
+      console.error(`❌ Failed to send activation email to ${email}:`, error)
+    }
   }
 }

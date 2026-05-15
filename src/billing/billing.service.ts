@@ -106,18 +106,6 @@ export class BillingService {
       dueDate: invoice.dueDate,
       invoiceId: invoice.id,
     });
-    // 👆 SELESAI 👆
-
-    // Kirim notifikasi email
-    if (user.email) {
-      await this.notifications.sendInvoiceEmail(
-        user.email,
-        user.fullName,
-        invoiceNumber,
-        amount,
-        dueDate,
-      )
-    }
 
     return invoice
   }
