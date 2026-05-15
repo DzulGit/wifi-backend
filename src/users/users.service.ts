@@ -143,6 +143,16 @@ export class UsersService {
     })
     if (existing) throw new BadRequestException('Nomor HP sudah terdaftar')
 
+    // Cek duplikat email
+    if (data.email) {
+      const existingEmail = await this.prisma.user.findFirst({
+        where: { email: data.email },
+      })
+      if (existingEmail) {
+        throw new BadRequestException('Email sudah terdaftar, silakan gunakan email lain');
+      }
+    }
+
     const customerCode = await this.generateCustomerCode()
     const activationToken = randomBytes(32).toString('hex')
     const activationExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 hari
