@@ -18,12 +18,23 @@ export class NotificationsService {
   }
 
   // ===========================================================================
-  // 1. FUNGSI UNTUK FRONTEND (GET & READ NOTIFIKASI DARI TABEL)
+  // 1. FUNGSI UNTUK FRONTEND (GET, READ, & DELETE)
   // ===========================================================================
 
-  async getAppNotifications(userId: string) {
+  async getAppNotifications(userId: string, isRead?: boolean) {
+    // Siapkan kondisi pencarian dasar
+    const whereClause: any = {
+      userId,
+      isDeleted: false, // 👈 PENTING: Hanya tampilkan yang belum dihapus
+    };
+
+    // Jika frontend mengirim parameter isRead (true/false)
+    if (isRead !== undefined) {
+      whereClause.isRead = isRead;
+    }
+
     return this.prisma.notification.findMany({
-      where: { userId },
+      where: whereClause,
       orderBy: { createdAt: 'desc' },
       take: 50, // Batasi 50 notif terbaru agar ringan
     });
@@ -44,6 +55,36 @@ export class NotificationsService {
         isRead: true,
         readAt: new Date(),
       },
+    });
+  }
+
+  // Fungsi baru: Tandai semua sudah dibaca
+  async markAllAsRead(userId: string) {
+    return this.prisma.notification.updateMany({
+      where: {
+        userId,
+        isRead: false,
+        isDeleted: false,
+      },
+      data: {
+        isRead: true,
+        readAt: new Date(),
+      },
+    });
+  }
+
+  // Fungsi baru: Soft delete notifikasi
+  async softDelete(id: string, userId: string) {
+    const notif = await this.prisma.notification.findUnique({ where: { id } });
+    if (!notif) throw new NotFoundException('Notifikasi tidak ditemukan');
+
+    if (notif.userId !== userId) {
+      throw new ForbiddenException('Anda tidak berhak menghapus notifikasi ini');
+    }
+
+    return this.prisma.notification.update({
+      where: { id },
+      data: { isDeleted: true },
     });
   }
 
@@ -70,7 +111,7 @@ export class NotificationsService {
   }
 
   // ===========================================================================
-  // 3. FUNGSI EMAIL BAWAAN (TIDAK DIUBAH)
+  // 3. FUNGSI EMAIL BAWAAN
   // ===========================================================================
 
   async sendOtpEmail(email: string, code: string, name: string) {
@@ -98,7 +139,6 @@ export class NotificationsService {
       console.log(`✅ OTP email sent to ${email}`)
     } catch (error) {
       console.error(`❌ Failed to send OTP email to ${email}:`, error)
-      // Jangan throw — biar OTP tetap bisa dicek meski email gagal
     }
   }
 
