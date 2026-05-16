@@ -27,9 +27,9 @@ export class UsersService {
       title: '🔄 Request Ganti Paket',
       message: `Pelanggan ${user.fullName} (${user.customerCode}) mengajukan pindah ke paket ${newPkg.name}.`,
       category: 'SYSTEM',
-      link: `/admin/pelanggan/${userId}`,
+      link: '/admin/permintaan?tab=ganti_paket',
       isUrgent: false,
-      metadata: { userId, newPackageId }
+      metadata: { userId, newPackageId, requestType: 'PACKAGE' }
     });
 
     return { message: 'Request ganti paket berhasil dikirim ke admin' };
@@ -43,9 +43,9 @@ export class UsersService {
       title: '😢 Request Putus Berlangganan',
       message: `Pelanggan ${user.fullName} (${user.customerCode}) mengajukan putus berlangganan. Alasan: ${reason}`,
       category: 'SYSTEM',
-      link: `/admin/pelanggan/${userId}`,
+      link: '/admin/permintaan?tab=putus_langganan',
       isUrgent: true,
-      metadata: { userId, reason }
+      metadata: { userId, reason, requestType: 'CANCEL' }
     });
 
     return { message: 'Request putus berlangganan berhasil dikirim' };
@@ -59,9 +59,9 @@ export class UsersService {
       title: '🏠 Request Pindah Alamat',
       message: `Pelanggan ${user.fullName} (${user.customerCode}) mengajukan pindah alamat ke: ${newAddress}`,
       category: 'SYSTEM',
-      link: `/admin/pelanggan/${userId}`,
+      link: '/admin/permintaan?tab=pindah_alamat',
       isUrgent: false,
-      metadata: { userId, newAddress }
+      metadata: { userId, newAddress, requestType: 'ADDRESS' }
     });
 
     return { message: 'Request pindah alamat berhasil dikirim' };

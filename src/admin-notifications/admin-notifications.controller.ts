@@ -1,5 +1,17 @@
-import { Controller, Get, Post, Delete, UseGuards, Query, Param, Body, BadRequestException } from '@nestjs/common'
-import { AdminNotificationsService } from './admin-notifications.service'
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  UseGuards,
+  Query,
+  Param,
+  Body,
+  Request,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common'
+import { AdminNotificationsService, PermintaanDecision } from './admin-notifications.service'
 import { AuthGuard } from '@nestjs/passport'
 import { AdminNotificationCategory } from '@prisma/client'
 
@@ -7,6 +19,12 @@ import { AdminNotificationCategory } from '@prisma/client'
 @Controller('admin/notifications')
 export class AdminNotificationsController {
   constructor(private service: AdminNotificationsService) {}
+
+  private requireAdmin(req: { user?: { type?: string } }) {
+    if (req.user?.type !== 'admin') {
+      throw new ForbiddenException('Hanya admin yang boleh mengakses endpoint ini')
+    }
+  }
 
   /**
    * GET /admin/notifications
@@ -82,6 +100,27 @@ export class AdminNotificationsController {
   @Post(':id/read')
   async markAsRead(@Param('id') id: string) {
     return this.service.markAsRead(id)
+  }
+
+  /**
+   * POST /admin/notifications/:id/process
+   * Setujui atau tolak permintaan pelanggan (ganti paket / pindah alamat / putus langganan)
+   * Body: { decision: 'APPROVED' | 'REJECTED', note?: string }
+   */
+  @Post(':id/process')
+  async processUserRequest(
+    @Param('id') id: string,
+    @Body() body: { decision: PermintaanDecision; note?: string },
+    @Request() req: { user?: { type?: string } },
+  ) {
+    this.requireAdmin(req)
+
+    const valid: PermintaanDecision[] = ['APPROVED', 'REJECTED']
+    if (!body.decision || !valid.includes(body.decision)) {
+      throw new BadRequestException('decision harus APPROVED atau REJECTED')
+    }
+
+    return this.service.processUserRequest(id, body.decision, body.note)
   }
 
   /**
