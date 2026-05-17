@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { ServiceRequestType } from '@prisma/client';
+import { Prisma, ServiceRequestType } from '@prisma/client';
 
 @Injectable()
 export class ServiceRequestsService {
@@ -30,7 +30,7 @@ export class ServiceRequestsService {
   async createRequest(
     userId: string,
     type: ServiceRequestType,
-    requestData: Record<string, unknown>,
+    requestData: Prisma.InputJsonValue,
   ) {
     // a. VALIDASI ANTI-SPAM — tolak jika masih ada yang PENDING
     const check = await this.checkActiveRequest(userId);
