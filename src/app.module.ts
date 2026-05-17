@@ -14,11 +14,13 @@ import { AdminNotificationsModule } from './admin-notifications/admin-notificati
 import { AvatarsModule } from './avatars/avatars.module' 
 import { ScheduleModule } from '@nestjs/schedule';
 import { NotificationsModule } from './notifications/notifications.module'
+import { ServiceRequestsModule } from './service-request/service-requests.module';
 
 @Module({
   imports: [
     ScheduleModule.forRoot(),
     NotificationsModule,
+    ServiceRequestsModule,
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([
       {
