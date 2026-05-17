@@ -1,9 +1,10 @@
 import { Controller, Get, Post, Body, UseGuards, Req } from '@nestjs/common';
 import { ServiceRequestsService } from './service-requests.service';
 import { ServiceRequestType } from '@prisma/client';
+import { AuthGuard } from '@nestjs/passport';
 
 @Controller('service-requests')
-// @UseGuards(JwtAuthGuard) // 👈 Aktifkan guard auth kamu di sini agar bisa mengambil data user login
+@UseGuards(AuthGuard('jwt')) // 👈 Aktifkan guard auth kamu di sini agar bisa mengambil data user login
 export class ServiceRequestsController {
   constructor(private readonly serviceRequestsService: ServiceRequestsService) {}
 
