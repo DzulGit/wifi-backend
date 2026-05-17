@@ -15,6 +15,7 @@ import { AvatarsModule } from './avatars/avatars.module'
 import { ScheduleModule } from '@nestjs/schedule';
 import { NotificationsModule } from './notifications/notifications.module'
 import { ServiceRequestsModule } from './service-request/service-requests.module';
+import { ActivityLogsModule } from './activity-logs/activity-logs.module'
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { ServiceRequestsModule } from './service-request/service-requests.module
     TicketsModule,
     AdminNotificationsModule,
     AvatarsModule,
+    ActivityLogsModule,
   ],
   providers: [
     {
