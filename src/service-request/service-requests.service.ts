@@ -7,26 +7,32 @@ export class ServiceRequestsService {
   constructor(private prisma: PrismaService) {}
 
   // 1. Cek status request terakhir user
+  //    Mengembalikan 3 hal:
+  //    - hasActiveRequest : apakah ada yang masih PENDING (untuk Lock Screen)
+  //    - request          : data request yang PENDING (null kalau tidak ada)
+  //    - lastRequest      : data request paling terakhir (APAPUN statusnya, untuk Interstitial Screen)
   async checkActiveRequest(userId: string) {
-    // Cari 1 pengajuan paling terakhir berdasarkan tanggal dibuat (descending)
     const latestRequest = await this.prisma.serviceRequest.findFirst({
       where: { userId },
       orderBy: { createdAt: 'desc' },
     });
 
+    const isPending = latestRequest?.status === 'PENDING';
+
     return {
-      // Lock screen nyala cuma kalau statusnya masih PENDING
-      hasActiveRequest: latestRequest?.status === 'PENDING',
-      request: latestRequest?.status === 'PENDING' ? latestRequest : null,
-      
-      // Kirim riwayat terakhir (buat nampilin banner REJECTED di frontend)
-      lastRequest: latestRequest, 
+      hasActiveRequest: isPending,
+      request: isPending ? latestRequest : null,
+      lastRequest: latestRequest ?? null,
     };
   }
 
   // 2. Buat request baru (Ganti Paket, Pindah Alamat, Putus)
-  async createRequest(userId: string, type: ServiceRequestType, requestData: any) {
-    // a. VALIDASI ANTI-SPAM
+  async createRequest(
+    userId: string,
+    type: ServiceRequestType,
+    requestData: Record<string, unknown>,
+  ) {
+    // a. VALIDASI ANTI-SPAM — tolak jika masih ada yang PENDING
     const check = await this.checkActiveRequest(userId);
     if (check.hasActiveRequest) {
       throw new BadRequestException(
@@ -43,26 +49,28 @@ export class ServiceRequestsService {
       },
     });
 
-    // c. AMBIL DATA USER BUAT BIKIN TEKS NOTIFIKASI
+    // c. AMBIL DATA USER UNTUK TEKS NOTIFIKASI
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { fullName: true, customerCode: true },
     });
 
-    // d. BIKIN TEKS LABEL BERDASARKAN TIPE REQUEST
-    const requestTypeLabel = 
-      type === 'PACKAGE_CHANGE' ? 'Ganti Paket' : 
-      type === 'ADDRESS_MOVE' ? 'Pindah Alamat' : 
-      'Putus Langganan';
+    // d. LABEL TIPE REQUEST
+    const requestTypeLabel =
+      type === 'PACKAGE_CHANGE'
+        ? 'Ganti Paket'
+        : type === 'ADDRESS_MOVE'
+          ? 'Pindah Alamat'
+          : 'Putus Langganan';
 
     // e. KIRIM NOTIFIKASI KE DASHBOARD ADMIN
     await this.prisma.adminNotification.create({
       data: {
         title: `Pengajuan ${requestTypeLabel} Baru`,
         message: `Pelanggan ${user?.fullName} (${user?.customerCode}) mengajukan permohonan ${requestTypeLabel}. Segera tinjau pengajuan ini.`,
-        category: 'ACCOUNT', // Memasukkan ke kategori akun
-        link: '/admin/layanan', // 👈 Sesuaikan URL ini dengan halaman tabel request di frontend admin lu
-        isUrgent: type === 'CANCELLATION', // Kalau putus langganan, tandai sebagai urgent (darurat)
+        category: 'ACCOUNT',
+        link: '/admin/layanan',
+        isUrgent: type === 'CANCELLATION',
       },
     });
 
