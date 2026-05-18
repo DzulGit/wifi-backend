@@ -39,10 +39,6 @@ export class AdminNotificationsService {
     )
   }
 
-  /**
-   * Create an admin notification (persisted to database)
-   * Called by business logic services when events occur
-   */
   async create(data: {
     title: string
     message: string
@@ -63,10 +59,6 @@ export class AdminNotificationsService {
     })
   }
 
-  /**
-   * Get all admin notifications with filtering
-   * Supports category filtering, pagination, read status
-   */
   async getAll(params: GetAllParams = {}): Promise<{
     notifications: AdminNotificationItem[]
     meta: {
@@ -107,9 +99,6 @@ export class AdminNotificationsService {
     }
   }
 
-  /**
-   * Get notifications by category
-   */
   async getByCategory(
     category: AdminNotificationCategory,
     page = 1,
@@ -121,9 +110,6 @@ export class AdminNotificationsService {
     return this.getAll({ category, page, limit })
   }
 
-  /**
-   * Get unread notifications only
-   */
   async getUnread(page = 1, limit = 20): Promise<{
     notifications: AdminNotificationItem[]
     meta: { total: number; page: number; limit: number; totalPages: number; unreadCount: number }
@@ -157,6 +143,7 @@ export class AdminNotificationsService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } })
     if (!user) throw new NotFoundException('Pelanggan tidak ditemukan')
 
+    // 1. UPDATE DATA USER (Jika APPROVED)
     if (decision === 'APPROVED') {
       if (notif.title.includes('Ganti Paket')) {
         const newPackageId = metadata.newPackageId as string | undefined
@@ -182,6 +169,24 @@ export class AdminNotificationsService {
       }
     }
 
+    // 2. 👇 TAMBAHAN BARU: UPDATE TABEL ServiceRequest BIAR GEMBOK USER KESINKRON! 👇
+    const requestId = metadata.requestId as string | undefined;
+    if (requestId) {
+      await this.prisma.serviceRequest.update({
+        where: { id: requestId },
+        data: {
+          status: decision,
+          adminNotes: note?.trim(),
+          processedAt: new Date(),
+        }
+      }).catch(err => {
+        // Ignored gracefully if somehow ID not found, but normally it should exist
+        console.error('Gagal update ServiceRequest:', err);
+      });
+    }
+    // 👆 AKHIR TAMBAHAN BARU 👆
+
+    // 3. UPDATE TABEL AdminNotification
     const updated = await this.prisma.adminNotification.update({
       where: { id },
       data: {
@@ -195,6 +200,7 @@ export class AdminNotificationsService {
       },
     })
 
+    // 4. KIRIM NOTIFIKASI KE USER
     if (decision === 'APPROVED') {
       await this.notifications.createNotification({
         userId,
@@ -219,9 +225,6 @@ export class AdminNotificationsService {
     }
   }
 
-  /**
-   * Mark a notification as read
-   */
   async markAsRead(id: string): Promise<AdminNotificationItem> {
     return this.prisma.adminNotification.update({
       where: { id },
@@ -229,9 +232,6 @@ export class AdminNotificationsService {
     })
   }
 
-  /**
-   * Mark multiple notifications as read
-   */
   async markManyAsRead(ids: string[]): Promise<{ count: number }> {
     return this.prisma.adminNotification.updateMany({
       where: { id: { in: ids } },
@@ -239,9 +239,6 @@ export class AdminNotificationsService {
     })
   }
 
-  /**
-   * Mark all unread notifications as read
-   */
   async markAllAsRead(): Promise<{ count: number }> {
     return this.prisma.adminNotification.updateMany({
       where: { isRead: false },
@@ -249,27 +246,18 @@ export class AdminNotificationsService {
     })
   }
 
-  /**
-   * Delete a notification
-   */
   async delete(id: string): Promise<void> {
     await this.prisma.adminNotification.delete({
       where: { id },
     })
   }
 
-  /**
-   * Delete multiple notifications
-   */
   async deleteMany(ids: string[]): Promise<{ count: number }> {
     return this.prisma.adminNotification.deleteMany({
       where: { id: { in: ids } },
     })
   }
 
-  /**
-   * Get summary stats
-   */
   async getSummary(): Promise<{
     totalUnread: number
     byCategory: Record<AdminNotificationCategory, number>
@@ -301,10 +289,6 @@ export class AdminNotificationsService {
     }
   }
 
-  /**
-   * Delete old notifications (older than X days)
-   * For cleanup/archive purposes
-   */
   async deleteOlderThan(days: number): Promise<{ count: number }> {
     const cutoffDate = new Date()
     cutoffDate.setDate(cutoffDate.getDate() - days)
@@ -312,7 +296,7 @@ export class AdminNotificationsService {
     return this.prisma.adminNotification.deleteMany({
       where: {
         createdAt: { lt: cutoffDate },
-        isRead: true, // Only delete read ones to preserve recent activity
+        isRead: true,
       },
     })
   }

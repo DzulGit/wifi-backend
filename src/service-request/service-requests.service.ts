@@ -6,11 +6,6 @@ import { Prisma, ServiceRequestType } from '@prisma/client';
 export class ServiceRequestsService {
   constructor(private prisma: PrismaService) {}
 
-  // 1. Cek status request terakhir user
-  //    Mengembalikan 3 hal:
-  //    - hasActiveRequest : apakah ada yang masih PENDING (untuk Lock Screen)
-  //    - request          : data request yang PENDING (null kalau tidak ada)
-  //    - lastRequest      : data request paling terakhir (APAPUN statusnya, untuk Interstitial Screen)
   async checkActiveRequest(userId: string) {
     const latestRequest = await this.prisma.serviceRequest.findFirst({
       where: { userId },
@@ -26,13 +21,11 @@ export class ServiceRequestsService {
     };
   }
 
-  // 2. Buat request baru (Ganti Paket, Pindah Alamat, Putus)
   async createRequest(
     userId: string,
     type: ServiceRequestType,
     requestData: Prisma.InputJsonValue,
   ) {
-    // a. VALIDASI ANTI-SPAM — tolak jika masih ada yang PENDING
     const check = await this.checkActiveRequest(userId);
     if (check.hasActiveRequest) {
       throw new BadRequestException(
@@ -40,7 +33,6 @@ export class ServiceRequestsService {
       );
     }
 
-    // b. SIMPAN REQUEST KE DATABASE
     const newRequest = await this.prisma.serviceRequest.create({
       data: {
         userId,
@@ -49,13 +41,11 @@ export class ServiceRequestsService {
       },
     });
 
-    // c. AMBIL DATA USER UNTUK TEKS NOTIFIKASI
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { fullName: true, customerCode: true },
     });
 
-    // d. LABEL TIPE REQUEST
     const requestTypeLabel =
       type === 'PACKAGE_CHANGE'
         ? 'Ganti Paket'
@@ -63,23 +53,34 @@ export class ServiceRequestsService {
           ? 'Pindah Alamat'
           : 'Putus Langganan';
 
-    // e. KIRIM NOTIFIKASI KE DASHBOARD ADMIN
+    // 👇 SESUAIKAN KATEGORI DENGAN YANG DIHARAPKAN TAB FRONTEND ADMIN
+    const categoryMap = {
+      PACKAGE_CHANGE: 'PACKAGE',
+      ADDRESS_MOVE: 'ADDRESS',
+      CANCELLATION: 'CANCEL',
+    };
+
     await this.prisma.adminNotification.create({
       data: {
         title: `Pengajuan ${requestTypeLabel} Baru`,
         message: `Pelanggan ${user?.fullName} (${user?.customerCode}) mengajukan permohonan ${requestTypeLabel}. Segera tinjau pengajuan ini.`,
-        category: 'ACCOUNT',
+        category: categoryMap[type] || 'ACCOUNT', // 👈 Menggunakan kategori pencarian tab admin
         link: '/admin/layanan',
         isUrgent: type === 'CANCELLATION',
+        metadata: {
+          requestId: newRequest.id, // 👈 Amankan ID ini untuk diproses controller notifikasi
+          userId: userId,
+          ...(type === 'PACKAGE_CHANGE' && { newPackageId: (requestData as any).newPackageId }),
+          ...(type === 'ADDRESS_MOVE' && { newAddress: (requestData as any).newAddress }),
+          ...(type === 'CANCELLATION' && { reason: (requestData as any).reason }),
+        },
       },
     });
 
     return newRequest;
   }
 
-  // 3. Fungsi khusus Admin untuk Approve / Reject Pengajuan
   async updateRequestStatusByAdmin(requestId: string, status: 'APPROVED' | 'REJECTED', adminNotes?: string) {
-    // a. Cari data request-nya dulu
     const request = await this.prisma.serviceRequest.findUnique({
       where: { id: requestId },
     });
@@ -88,38 +89,43 @@ export class ServiceRequestsService {
       throw new BadRequestException('Data pengajuan tidak ditemukan.');
     }
 
-    // b. Update data ServiceRequest beserta waktu diproses (processedAt)
-    const updatedRequest = await this.prisma.serviceRequest.update({
+    // 👇 JIKA DI-APPROVE, UPDATE LANGSUNG DATA UTAMA DI TABEL USER
+    if (status === 'APPROVED') {
+      const dataReq = request.requestData as any;
+      const updateUserData: any = {};
+
+      if (request.type === 'CANCELLATION') {
+        updateUserData.status = 'INACTIVE'; // Matikan status langganan user
+      } else if (request.type === 'PACKAGE_CHANGE' && dataReq?.newPackageId) {
+        updateUserData.packageId = dataReq.newPackageId; // Update paket baru
+      } else if (request.type === 'ADDRESS_MOVE' && dataReq?.newAddress) {
+        updateUserData.address = dataReq.newAddress; // Update alamat baru
+      }
+
+      if (Object.keys(updateUserData).length > 0) {
+        await this.prisma.user.update({
+          where: { id: request.userId },
+          data: updateUserData,
+        });
+      }
+    }
+
+    return this.prisma.serviceRequest.update({
       where: { id: requestId },
       data: {
         status,
         adminNotes,
-        processedAt: new Date(), // 👈 Otomatis ngisi processedAt saat admin klik klik!
+        processedAt: new Date(),
       },
     });
-
-    // c. KHUSUS PUTUS LANGGANAN (CANCELLATION) & DI-APPROVED
-    // Kita otomatis ubah status user-nya jadi INACTIVE agar hitungan cron job 3 bulan berjalan
-    if (request.type === 'CANCELLATION' && status === 'APPROVED') {
-      await this.prisma.user.update({
-        where: { id: request.userId },
-        data: { status: 'INACTIVE' }, // Menandakan pelanggan sudah berhenti berlangganan
-      });
-    }
-
-    return updatedRequest;
   }
 
-  // Mengambil semua data antrean pengajuan untuk Dashboard Admin
   async getAllRequestsForAdmin() {
     return this.prisma.serviceRequest.findMany({
       include: {
-        // Sekalian narik data nama dan kode pelanggan dari tabel User biar admin tau siapa yang ngajuin
-        user: { 
-          select: { fullName: true, customerCode: true } 
-        }
+        user: { select: { fullName: true, customerCode: true } },
       },
-      orderBy: { createdAt: 'desc' }, // Urutkan dari yang paling baru
+      orderBy: { createdAt: 'desc' },
     });
   }
 }
