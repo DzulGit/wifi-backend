@@ -19,6 +19,7 @@ enum UserStatus {
   ACTIVE       // aktif berlangganan
   SUSPENDED    // disuspend (nunggak / manual admin)
   INACTIVE     // berhenti berlangganan
+  DELETED
 }
 
 enum AdminRole {

@@ -31,7 +31,7 @@ export class ServiceRequestsCron {
       const userAkanSuspend = await this.prisma.user.findMany({
         where: {
           status: { in: ['ACTIVE', 'INACTIVE'] }, // Sesuaikan dengan enum status User di projekmu
-          serviceRequests: {
+          ServiceRequest: { // 👈 INI YANG DIGANTI (Huruf 'S' besar, tanpa 's' di akhir)
             some: {
               type: 'CANCELLATION',
               status: 'APPROVED',
@@ -48,7 +48,7 @@ export class ServiceRequestsCron {
         // Update status user menjadi SUSPENDED
         await this.prisma.user.updateMany({
           where: { id: { in: ids } },
-          data: { status: 'SUSPENDED' }, // Pastikan 'SUSPENDED' ada di enum status User
+          data: { status: 'SUSPENDED' }, // Pastikan 'SUSPENDED' udah ditambahin di schema.prisma
         });
 
         this.logger.log(`Berhasil men-suspend ${userAkanSuspend.length} akun karena 3 bulan tidak berlangganan.`);
@@ -62,7 +62,7 @@ export class ServiceRequestsCron {
       const userAkanDihapus = await this.prisma.user.findMany({
         where: {
           status: 'SUSPENDED',
-          serviceRequests: {
+          ServiceRequest: { // 👈 INI JUGA DIGANTI (Huruf 'S' besar, tanpa 's' di akhir)
             some: {
               type: 'CANCELLATION',
               status: 'APPROVED',
@@ -76,13 +76,10 @@ export class ServiceRequestsCron {
       if (userAkanDihapus.length > 0) {
         const ids = userAkanDihapus.map((u) => u.id);
 
-        // Opsi A: Hard Delete (Hapus permanen dari DB)
-        // await this.prisma.user.deleteMany({ where: { id: { in: ids } } });
-
         // Opsi B: Soft Delete / Archive (Ubah status ke DELETED / ARCHIVED) -> PALING AMAN buat riwayat finance/billing
         await this.prisma.user.updateMany({
           where: { id: { in: ids } },
-          data: { status: 'DELETED' }, // Pastikan 'DELETED' atau 'ARCHIVED' ada di enum status User
+          data: { status: 'DELETED' }, // Pastikan 'DELETED' udah ditambahin di schema.prisma
         });
 
         this.logger.log(`Berhasil menghapus/mengarsipkan ${userAkanDihapus.length} akun yang melewati masa tenggang 6 bulan.`);
