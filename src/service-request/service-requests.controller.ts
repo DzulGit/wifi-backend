@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Req, Patch, Param } from '@nestjs/common';
 import { ServiceRequestsService } from './service-requests.service';
 import { ServiceRequestType } from '@prisma/client';
 import { AuthGuard } from '@nestjs/passport';
@@ -25,5 +25,15 @@ export class ServiceRequestsController {
   ) {
     const userId = req.user?.id || req.user?.sub;
     return this.serviceRequestsService.createRequest(userId, type, requestData);
+  }
+
+  // Endpoint untuk Admin memproses pengajuan (Taruh di paling bawah controller)
+  @Patch(':id/process')
+  async processRequestByAdmin(
+    @Param('id') id: string,
+    @Body('status') status: 'APPROVED' | 'REJECTED',
+    @Body('adminNotes') adminNotes?: string,
+  ) {
+    return this.serviceRequestsService.updateRequestStatusByAdmin(id, status, adminNotes);
   }
 }

@@ -76,4 +76,37 @@ export class ServiceRequestsService {
 
     return newRequest;
   }
+
+  // 3. Fungsi khusus Admin untuk Approve / Reject Pengajuan
+  async updateRequestStatusByAdmin(requestId: string, status: 'APPROVED' | 'REJECTED', adminNotes?: string) {
+    // a. Cari data request-nya dulu
+    const request = await this.prisma.serviceRequest.findUnique({
+      where: { id: requestId },
+    });
+
+    if (!request) {
+      throw new BadRequestException('Data pengajuan tidak ditemukan.');
+    }
+
+    // b. Update data ServiceRequest beserta waktu diproses (processedAt)
+    const updatedRequest = await this.prisma.serviceRequest.update({
+      where: { id: requestId },
+      data: {
+        status,
+        adminNotes,
+        processedAt: new Date(), // 👈 Otomatis ngisi processedAt saat admin klik klik!
+      },
+    });
+
+    // c. KHUSUS PUTUS LANGGANAN (CANCELLATION) & DI-APPROVED
+    // Kita otomatis ubah status user-nya jadi INACTIVE agar hitungan cron job 3 bulan berjalan
+    if (request.type === 'CANCELLATION' && status === 'APPROVED') {
+      await this.prisma.user.update({
+        where: { id: request.userId },
+        data: { status: 'INACTIVE' }, // Menandakan pelanggan sudah berhenti berlangganan
+      });
+    }
+
+    return updatedRequest;
+  }
 }
