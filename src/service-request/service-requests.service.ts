@@ -109,4 +109,17 @@ export class ServiceRequestsService {
 
     return updatedRequest;
   }
+
+  // Mengambil semua data antrean pengajuan untuk Dashboard Admin
+  async getAllRequestsForAdmin() {
+    return this.prisma.serviceRequest.findMany({
+      include: {
+        // Sekalian narik data nama dan kode pelanggan dari tabel User biar admin tau siapa yang ngajuin
+        user: { 
+          select: { fullName: true, customerCode: true } 
+        }
+      },
+      orderBy: { createdAt: 'desc' }, // Urutkan dari yang paling baru
+    });
+  }
 }
