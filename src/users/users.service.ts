@@ -36,20 +36,20 @@ export class UsersService {
   }
 
   async requestCancellation(userId: string, reason: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new NotFoundException('User tidak ditemukan');
+  const user = await this.prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new NotFoundException('User tidak ditemukan');
 
-    await this.adminNotifications.create({
-      title: '😢 Request Putus Berlangganan',
-      message: `Pelanggan ${user.fullName} (${user.customerCode}) mengajukan putus berlangganan. Alasan: ${reason}`,
-      category: 'SYSTEM',
-      link: '/admin/permintaan?tab=putus_langganan',
-      isUrgent: true,
-      metadata: { userId, reason, requestType: 'CANCEL' }
-    });
+  await this.adminNotifications.create({
+    title: 'Pengajuan Putus Berlangganan', // ← SEBELUMNYA: 'Request Putus Berlangganan' 
+    message: `Pelanggan ${user.fullName} (${user.customerCode}) mengajukan putus berlangganan. Alasan: ${reason}`,
+    category: 'SYSTEM',
+    link: '/admin/permintaan?tab=putus_langganan',
+    isUrgent: true,
+    metadata: { userId, reason, requestType: 'CANCEL' }
+  });
 
-    return { message: 'Request putus berlangganan berhasil dikirim' };
-  }
+  return { message: 'Request putus berlangganan berhasil dikirim' };
+}
 
   async requestAddressMove(userId: string, newAddress: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
