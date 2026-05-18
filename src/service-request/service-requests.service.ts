@@ -53,34 +53,33 @@ export class ServiceRequestsService {
           ? 'Pindah Alamat'
           : 'Putus Langganan';
 
-    // 👇 SESUAIKAN KATEGORI DENGAN YANG DIHARAPKAN TAB FRONTEND ADMIN
-    const categoryMap = {
-      PACKAGE_CHANGE: 'PACKAGE',
-      ADDRESS_MOVE: 'ADDRESS',
-      CANCELLATION: 'CANCEL',
-    };
-
+    // FIX: semua request type pakai category 'SYSTEM'
+    // agar ter-fetch oleh permintaan/page.tsx yang query ?category=SYSTEM
     await this.prisma.adminNotification.create({
       data: {
         title: `Pengajuan ${requestTypeLabel} Baru`,
         message: `Pelanggan ${user?.fullName} (${user?.customerCode}) mengajukan permohonan ${requestTypeLabel}. Segera tinjau pengajuan ini.`,
-        category: categoryMap[type] as any, 
+        category: 'SYSTEM',
         link: '/admin/permintaan',
         isUrgent: type === 'CANCELLATION',
         metadata: {
-          requestId: newRequest.id, 
+          requestId: newRequest.id,
           userId: userId,
           ...(type === 'PACKAGE_CHANGE' && { newPackageId: (requestData as any).newPackageId }),
           ...(type === 'ADDRESS_MOVE' && { newAddress: (requestData as any).newAddress }),
-          ...(type === 'CANCELLATION' && { reason: (requestData as any).reason })
-        }
+          ...(type === 'CANCELLATION' && { reason: (requestData as any).reason }),
+        },
       },
     });
 
     return newRequest;
   }
 
-  async updateRequestStatusByAdmin(requestId: string, status: 'APPROVED' | 'REJECTED', adminNotes?: string) {
+  async updateRequestStatusByAdmin(
+    requestId: string,
+    status: 'APPROVED' | 'REJECTED',
+    adminNotes?: string,
+  ) {
     const request = await this.prisma.serviceRequest.findUnique({
       where: { id: requestId },
     });
@@ -89,17 +88,16 @@ export class ServiceRequestsService {
       throw new BadRequestException('Data pengajuan tidak ditemukan.');
     }
 
-    // 👇 JIKA DI-APPROVE, UPDATE LANGSUNG DATA UTAMA DI TABEL USER
     if (status === 'APPROVED') {
       const dataReq = request.requestData as any;
       const updateUserData: any = {};
 
       if (request.type === 'CANCELLATION') {
-        updateUserData.status = 'INACTIVE'; // Matikan status langganan user
+        updateUserData.status = 'INACTIVE';
       } else if (request.type === 'PACKAGE_CHANGE' && dataReq?.newPackageId) {
-        updateUserData.packageId = dataReq.newPackageId; // Update paket baru
+        updateUserData.packageId = dataReq.newPackageId;
       } else if (request.type === 'ADDRESS_MOVE' && dataReq?.newAddress) {
-        updateUserData.address = dataReq.newAddress; // Update alamat baru
+        updateUserData.address = dataReq.newAddress;
       }
 
       if (Object.keys(updateUserData).length > 0) {
