@@ -8,6 +8,12 @@ import { AuthGuard } from '@nestjs/passport';
 export class ServiceRequestsController {
   constructor(private readonly serviceRequestsService: ServiceRequestsService) {}
 
+  // 👇 INI YANG KURANG KEMAREN BANG: Endpoint untuk Admin menarik semua antrean
+  @Get('admin/all')
+  async getAllForAdmin() {
+    return this.serviceRequestsService.getAllRequestsForAdmin();
+  }
+
   // Endpoint untuk ngecek status lock di frontend
   @Get('active')
   async getActiveRequest(@Req() req: any) {
