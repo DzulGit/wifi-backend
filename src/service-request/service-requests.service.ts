@@ -65,7 +65,7 @@ export class ServiceRequestsService {
         title: `Pengajuan ${requestTypeLabel} Baru`,
         message: `Pelanggan ${user?.fullName} (${user?.customerCode}) mengajukan permohonan ${requestTypeLabel}. Segera tinjau pengajuan ini.`,
         category: categoryMap[type] as any, 
-        link: '/admin/layanan',
+        link: '/admin/permintaan',
         isUrgent: type === 'CANCELLATION',
         metadata: {
           requestId: newRequest.id, 
