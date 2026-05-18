@@ -164,7 +164,7 @@ export class AdminNotificationsService {
       } else if (notif.title.includes('Putus Berlangganan')) {
         await this.prisma.user.update({
           where: { id: userId },
-          data: { status: 'INACTIVE' satisfies UserStatus },
+          data: { status: 'SUSPENDED' satisfies UserStatus },
         })
       }
     }
