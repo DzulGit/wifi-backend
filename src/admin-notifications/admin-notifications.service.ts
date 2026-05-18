@@ -35,7 +35,7 @@ export class AdminNotificationsService {
     return (
       title.includes('Ganti Paket') ||
       title.includes('Pindah Alamat') ||
-      title.includes('Putus Berlangganan')
+      title.includes('Putus Langganan')
     )
   }
 
@@ -161,7 +161,7 @@ export class AdminNotificationsService {
           where: { id: userId },
           data: { address: newAddress.trim() },
         })
-      } else if (notif.title.includes('Putus Berlangganan')) {
+      } else if (notif.title.includes('Putus Langganan')) {
         await this.prisma.user.update({
           where: { id: userId },
           data: { status: 'INACTIVE' satisfies UserStatus },
