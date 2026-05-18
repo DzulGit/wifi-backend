@@ -64,16 +64,16 @@ export class ServiceRequestsService {
       data: {
         title: `Pengajuan ${requestTypeLabel} Baru`,
         message: `Pelanggan ${user?.fullName} (${user?.customerCode}) mengajukan permohonan ${requestTypeLabel}. Segera tinjau pengajuan ini.`,
-        category: categoryMap[type] || 'ACCOUNT', // 👈 Menggunakan kategori pencarian tab admin
+        category: categoryMap[type] as any, 
         link: '/admin/layanan',
         isUrgent: type === 'CANCELLATION',
         metadata: {
-          requestId: newRequest.id, // 👈 Amankan ID ini untuk diproses controller notifikasi
+          requestId: newRequest.id, 
           userId: userId,
           ...(type === 'PACKAGE_CHANGE' && { newPackageId: (requestData as any).newPackageId }),
           ...(type === 'ADDRESS_MOVE' && { newAddress: (requestData as any).newAddress }),
-          ...(type === 'CANCELLATION' && { reason: (requestData as any).reason }),
-        },
+          ...(type === 'CANCELLATION' && { reason: (requestData as any).reason })
+        }
       },
     });
 

@@ -413,6 +413,9 @@ enum AdminNotificationCategory {
   SYSTEM
   ACCOUNT
   BILLING
+  PACKAGE  
+  ADDRESS  
+  CANCEL  
 }
 
 model AdminNotification {
