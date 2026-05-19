@@ -163,4 +163,25 @@ export class UsersController {
 
     return this.usersService.updateStatus(id, body.status);
   }
+
+  // Endpoint untuk user yang di-suspend (putus langganan) agar bisa mendaftar/berlangganan kembali
+  @Post(':id/resubscribe')
+  async resubscribe(
+    @Param('id') id: string,
+    @Body('packageId') packageId: string,
+    @Request() req: any,
+  ) {
+    // Validasi keamanan: Pastikan user hanya bisa mendaftar ulang untuk akunnya sendiri
+    if (req.user?.type !== 'admin' && req.user?.id !== id) {
+      throw new ForbiddenException(
+        'Anda tidak memiliki akses untuk melakukan aksi ini',
+      );
+    }
+
+    if (!packageId) {
+      throw new BadRequestException('ID Paket harus dipilih');
+    }
+
+    return this.usersService.resubscribe(id, packageId);
+  }
 }

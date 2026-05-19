@@ -265,4 +265,45 @@ export class UsersService {
     const { password, activationToken, activationExpiry, ...safe } = user
     return safe
   }
+
+  // Logika bisnis untuk mengubah status mantan pelanggan menjadi PENDING kembali dengan paket baru
+  async resubscribe(userId: string, packageId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('Data pelanggan tidak ditemukan');
+    }
+
+    const pkg = await this.prisma.package.findUnique({ where: { id: packageId } });
+    if (!pkg) {
+      throw new NotFoundException('Paket internet yang dipilih tidak valid');
+    }
+
+    // Update status user menjadi PENDING dan perbarui paket pilihannya
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        status: 'PENDING',
+        packageId: packageId,
+      },
+    });
+
+    // Kirim notifikasi ke dashboard admin agar segera di-approve aktivasi ulangnya
+    await this.adminNotifications.create({
+      title: '✨ Pelanggan Berlangganan Kembali',
+      message: `Mantan pelanggan ${user.fullName} (${user.customerCode}) mengajukan permohonan berlangganan kembali dengan memilih paket ${pkg.name}.`,
+      category: 'ACCOUNT',
+      link: '/admin/pelanggan',
+      isUrgent: true,
+      metadata: {
+        userId: user.id,
+        packageId: packageId,
+        actionType: 'RESUBSCRIBE',
+      },
+    });
+
+    return {
+      message: 'Permohonan berlangganan kembali berhasil dikirim. Menunggu aktivasi dari Admin.',
+      user: this.excludeSensitive(updatedUser),
+    };
+  }
 }
