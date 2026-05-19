@@ -38,6 +38,13 @@ export class NotificationsController {
     return { data };
   }
 
+  @Delete('delete-all')
+  async deleteAll(@Request() req: any) {
+    const userId = req.user.id;
+    // 2️⃣ Kita oper eksekusinya ke Service, BUKAN panggil prisma di sini
+    const data = await this.notificationsService.deleteAll(userId);
+    return { message: 'Semua notifikasi berhasil dihapus', data };
+  }
   // Endpoint untuk fitur hapus (soft delete)
   @Delete(':id')
   async deleteNotification(@Param('id') id: string, @Request() req: any) {

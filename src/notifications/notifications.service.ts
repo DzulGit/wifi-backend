@@ -88,6 +88,13 @@ export class NotificationsService {
     });
   }
 
+  // Fitur hapus semua notifikasi milik user
+  async deleteAll(userId: string) {
+    return this.prisma.notification.deleteMany({
+      where: { userId: userId }
+    });
+  }
+
   // ===========================================================================
   // 2. FUNGSI SAKTI UNTUK MEMBUAT NOTIFIKASI (Dipakai oleh service lain)
   // ===========================================================================
