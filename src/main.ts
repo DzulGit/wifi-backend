@@ -1,18 +1,21 @@
-import { NestFactory } from '@nestjs/core'
-import { AppModule } from './app.module'
-import { NestExpressApplication } from '@nestjs/platform-express'
-import { join } from 'path'
-import * as express from 'express'
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
+import * as express from 'express';
+import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule)
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // ── CORS ────────────────────────────────────────────────────────────────────
   // FIX: Hapus trailing slash dari origin — menyebabkan mismatch CORS
   const allowedOrigins = [
-    process.env.FRONTEND_URL ?? 'https://wifi-frontend-978253671723.asia-southeast2.run.app',
-    'https://wifi-frontend-978253671723.asia-southeast2.run.app', 'http://localhost:3000',
-  ]
+    process.env.FRONTEND_URL ??
+      'https://wifi-frontend-978253671723.asia-southeast2.run.app',
+    'https://wifi-frontend-978253671723.asia-southeast2.run.app',
+    'http://localhost:3000',
+  ];
 
   app.enableCors({
     origin: allowedOrigins,
@@ -20,25 +23,34 @@ async function bootstrap() {
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control'],
     exposedHeaders: ['Content-Type'],
-  })
+  });
+
+  // Global validation for DTOs
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
 
   // ── SECURITY HEADERS ────────────────────────────────────────────────────────
   app.use((req: any, res: any, next: any) => {
     // ZAP Finding: X-Content-Type-Options Header Missing
-    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.setHeader('X-Content-Type-Options', 'nosniff');
 
     // ZAP Finding: Missing Anti-clickjacking Header
-    res.setHeader('X-Frame-Options', 'DENY')
+    res.setHeader('X-Frame-Options', 'DENY');
 
     // Legacy XSS protection (modern browsers use CSP instead)
-    res.setHeader('X-XSS-Protection', '1; mode=block')
+    res.setHeader('X-XSS-Protection', '1; mode=block');
 
     // ZAP Finding: Strict-Transport-Security Header Not Set
     // max-age=31536000 = 1 tahun; includeSubDomains = semua subdomain pakai HTTPS
     res.setHeader(
       'Strict-Transport-Security',
       'max-age=31536000; includeSubDomains; preload',
-    )
+    );
 
     // ZAP Finding: Content Security Policy (CSP) Header Not Set
     // Hanya izinkan resource dari domain sendiri + Google APIs yang dipakai
@@ -47,41 +59,41 @@ async function bootstrap() {
       [
         "default-src 'self'",
         "script-src 'self'",
-        "style-src 'self' 'unsafe-inline'",        // unsafe-inline diperlukan untuk inline styles library
+        "style-src 'self' 'unsafe-inline'", // unsafe-inline diperlukan untuk inline styles library
         "img-src 'self' https://storage.googleapis.com data:",
         "connect-src 'self'",
         "font-src 'self'",
         "object-src 'none'",
-        "frame-ancestors 'none'",                  // Mitigasi clickjacking (CSP level)
+        "frame-ancestors 'none'", // Mitigasi clickjacking (CSP level)
         "base-uri 'self'",
         "form-action 'self'",
       ].join('; '),
-    )
+    );
 
     // ZAP Finding: Server Leaks Information via "X-Powered-By"
-    res.removeHeader('X-Powered-By')
+    res.removeHeader('X-Powered-By');
 
     // ZAP Finding: Referrer-Policy
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
 
     // ZAP Finding: Timestamp Disclosure — tidak expose Server header
-    res.removeHeader('Server')
+    res.removeHeader('Server');
 
     // Permissions Policy — batasi akses ke sensor & API browser yang tidak dipakai
     res.setHeader(
       'Permissions-Policy',
       'camera=(), microphone=(), geolocation=(self), payment=()',
-    )
+    );
 
-    next()
-  })
+    next();
+  });
 
-  app.use('/uploads', express.static(join(__dirname, '..', 'uploads')))
+  app.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
 
   const port = process.env.PORT || 3002;
-  
-  await app.listen(port, '0.0.0.0'); 
-  
+
+  await app.listen(port, '0.0.0.0');
+
   console.log(`🚀 Server running on port ${port}`);
 }
-bootstrap()
+bootstrap();
