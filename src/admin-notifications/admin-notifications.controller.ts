@@ -10,10 +10,13 @@ import {
   Request,
   BadRequestException,
   ForbiddenException,
-} from '@nestjs/common'
-import { AdminNotificationsService, PermintaanDecision } from './admin-notifications.service'
-import { AuthGuard } from '@nestjs/passport'
-import { AdminNotificationCategory } from '@prisma/client'
+} from '@nestjs/common';
+import {
+  AdminNotificationsService,
+  PermintaanDecision,
+} from './admin-notifications.service';
+import { AuthGuard } from '@nestjs/passport';
+import { AdminNotificationCategory } from '@prisma/client';
 
 @UseGuards(AuthGuard('jwt'))
 @Controller('admin/notifications')
@@ -22,7 +25,9 @@ export class AdminNotificationsController {
 
   private requireAdmin(req: { user?: { type?: string } }) {
     if (req.user?.type !== 'admin') {
-      throw new ForbiddenException('Hanya admin yang boleh mengakses endpoint ini')
+      throw new ForbiddenException(
+        'Hanya admin yang boleh mengakses endpoint ini',
+      );
     }
   }
 
@@ -47,7 +52,7 @@ export class AdminNotificationsController {
       isRead: isRead === 'true' ? true : isRead === 'false' ? false : undefined,
       page: page ? parseInt(page, 10) : 1,
       limit: limit ? Math.min(parseInt(limit, 10), 100) : 20,
-    })
+    });
   }
 
   /**
@@ -56,7 +61,7 @@ export class AdminNotificationsController {
    */
   @Get('summary')
   async getSummary() {
-    return this.service.getSummary()
+    return this.service.getSummary();
   }
 
   /**
@@ -64,11 +69,14 @@ export class AdminNotificationsController {
    * Get only unread notifications with pagination
    */
   @Get('unread')
-  async getUnread(@Query('page') page?: string, @Query('limit') limit?: string) {
+  async getUnread(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
     return this.service.getUnread(
       page ? parseInt(page, 10) : 1,
       limit ? Math.min(parseInt(limit, 10), 100) : 20,
-    )
+    );
   }
 
   /**
@@ -81,16 +89,22 @@ export class AdminNotificationsController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    const validCategories = ['FINANCE', 'SUPPORT', 'SYSTEM', 'ACCOUNT', 'BILLING']
+    const validCategories = [
+      'FINANCE',
+      'SUPPORT',
+      'SYSTEM',
+      'ACCOUNT',
+      'BILLING',
+    ];
     if (!validCategories.includes(category)) {
-      throw new BadRequestException(`Invalid category: ${category}`)
+      throw new BadRequestException(`Invalid category: ${category}`);
     }
 
     return this.service.getByCategory(
-      category as AdminNotificationCategory,
+      category,
       page ? parseInt(page, 10) : 1,
       limit ? Math.min(parseInt(limit, 10), 100) : 20,
-    )
+    );
   }
 
   /**
@@ -99,7 +113,7 @@ export class AdminNotificationsController {
    */
   @Post(':id/read')
   async markAsRead(@Param('id') id: string) {
-    return this.service.markAsRead(id)
+    return this.service.markAsRead(id);
   }
 
   /**
@@ -113,14 +127,14 @@ export class AdminNotificationsController {
     @Body() body: { decision: PermintaanDecision; note?: string },
     @Request() req: { user?: { type?: string } },
   ) {
-    this.requireAdmin(req)
+    this.requireAdmin(req);
 
-    const valid: PermintaanDecision[] = ['APPROVED', 'REJECTED']
+    const valid: PermintaanDecision[] = ['APPROVED', 'REJECTED'];
     if (!body.decision || !valid.includes(body.decision)) {
-      throw new BadRequestException('decision harus APPROVED atau REJECTED')
+      throw new BadRequestException('decision harus APPROVED atau REJECTED');
     }
 
-    return this.service.processUserRequest(id, body.decision, body.note)
+    return this.service.processUserRequest(id, body.decision, body.note);
   }
 
   /**
@@ -131,9 +145,9 @@ export class AdminNotificationsController {
   @Post('read/many')
   async markManyAsRead(@Body() body: { ids: string[] }) {
     if (!Array.isArray(body.ids) || body.ids.length === 0) {
-      throw new BadRequestException('ids must be a non-empty array')
+      throw new BadRequestException('ids must be a non-empty array');
     }
-    return this.service.markManyAsRead(body.ids)
+    return this.service.markManyAsRead(body.ids);
   }
 
   /**
@@ -142,7 +156,7 @@ export class AdminNotificationsController {
    */
   @Post('read/all')
   async markAllAsRead() {
-    return this.service.markAllAsRead()
+    return this.service.markAllAsRead();
   }
 
   /**
@@ -151,8 +165,8 @@ export class AdminNotificationsController {
    */
   @Delete(':id')
   async delete(@Param('id') id: string) {
-    await this.service.delete(id)
-    return { message: 'Notification deleted' }
+    await this.service.delete(id);
+    return { message: 'Notification deleted' };
   }
 
   /**
@@ -163,8 +177,8 @@ export class AdminNotificationsController {
   @Delete()
   async deleteMany(@Body() body: { ids: string[] }) {
     if (!Array.isArray(body.ids) || body.ids.length === 0) {
-      throw new BadRequestException('ids must be a non-empty array')
+      throw new BadRequestException('ids must be a non-empty array');
     }
-    return this.service.deleteMany(body.ids)
+    return this.service.deleteMany(body.ids);
   }
 }

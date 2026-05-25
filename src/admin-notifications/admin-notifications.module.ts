@@ -1,7 +1,7 @@
-import { Module } from '@nestjs/common'
-import { AdminNotificationsService } from './admin-notifications.service'
-import { AdminNotificationsController } from './admin-notifications.controller'
-import { NotificationsModule } from '../notifications/notifications.module'
+import { Module } from '@nestjs/common';
+import { AdminNotificationsService } from './admin-notifications.service';
+import { AdminNotificationsController } from './admin-notifications.controller';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [NotificationsModule],

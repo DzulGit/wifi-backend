@@ -33,24 +33,24 @@ export class UsersController {
 
   @Post(':id/request-package')
   async requestPackageChange(
-    @Param('id') id: string, 
-    @Body('newPackageId') newPackageId: string
+    @Param('id') id: string,
+    @Body('newPackageId') newPackageId: string,
   ) {
     return this.usersService.requestPackageChange(id, newPackageId);
   }
 
   @Post(':id/request-cancel')
   async requestCancellation(
-    @Param('id') id: string, 
-    @Body('reason') reason: string
+    @Param('id') id: string,
+    @Body('reason') reason: string,
   ) {
     return this.usersService.requestCancellation(id, reason);
   }
 
   @Post(':id/request-move')
   async requestAddressMove(
-    @Param('id') id: string, 
-    @Body('newAddress') newAddress: string
+    @Param('id') id: string,
+    @Body('newAddress') newAddress: string,
   ) {
     return this.usersService.requestAddressMove(id, newAddress);
   }
@@ -90,7 +90,9 @@ export class UsersController {
   findOne(@Param('id') id: string, @Request() req: any) {
     // FIX: User biasa boleh melihat datanya sendiri, Admin boleh lihat semua
     if (req.user?.type !== 'admin' && req.user?.id !== id) {
-      throw new ForbiddenException('Akses ditolak. Anda hanya dapat melihat data Anda sendiri.');
+      throw new ForbiddenException(
+        'Akses ditolak. Anda hanya dapat melihat data Anda sendiri.',
+      );
     }
     return this.usersService.findOne(id);
   }
@@ -126,7 +128,7 @@ export class UsersController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() body: any, @Request() req: any) {
     // FIX: requireAdmin dihapus dari sini agar user bisa masuk ke pengecekan di bawahnya
-    
+
     if (req.user?.type !== 'admin' && req.user?.id !== id) {
       throw new ForbiddenException(
         'Anda hanya bisa merubah profil Anda sendiri',
@@ -135,9 +137,9 @@ export class UsersController {
 
     // Jika bukan admin, pastikan field krusial dibuang agar tidak bisa di-hack
     if (req.user?.type !== 'admin') {
-      delete body.status; 
-      delete body.packageId; 
-      delete body.customerCode; 
+      delete body.status;
+      delete body.packageId;
+      delete body.customerCode;
     }
 
     return this.usersService.update(id, body);

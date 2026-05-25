@@ -1,9 +1,9 @@
-import { Controller, Get, Sse, UseGuards } from '@nestjs/common'
-import { Observable } from 'rxjs'
-import { MessageEvent } from '@nestjs/common'
-import { ActivityLogBroadcasterService } from './activity-log-broadcaster.service'
-import { AdminSseAuthGuard } from './guards/admin-sse-auth.guard'
-import { ApiActivityLog } from './activity-log.types'
+import { Controller, Get, Sse, UseGuards } from '@nestjs/common';
+import { Observable } from 'rxjs';
+import { MessageEvent } from '@nestjs/common';
+import { ActivityLogBroadcasterService } from './activity-log-broadcaster.service';
+import { AdminSseAuthGuard } from './guards/admin-sse-auth.guard';
+import { ApiActivityLog } from './activity-log.types';
 
 @Controller('admin/logs')
 export class ActivityLogsController {
@@ -15,7 +15,7 @@ export class ActivityLogsController {
   @Get('recent')
   @UseGuards(AdminSseAuthGuard)
   getRecent(): { logs: ApiActivityLog[] } {
-    return { logs: this.broadcaster.getRecent() }
+    return { logs: this.broadcaster.getRecent() };
   }
 
   /**
@@ -24,6 +24,6 @@ export class ActivityLogsController {
   @Sse('stream')
   @UseGuards(AdminSseAuthGuard)
   stream(): Observable<MessageEvent> {
-    return this.broadcaster.stream()
+    return this.broadcaster.stream();
   }
 }

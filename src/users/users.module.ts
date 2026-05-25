@@ -7,6 +7,6 @@ import { AdminNotificationsModule } from '../admin-notifications/admin-notificat
 @Module({
   imports: [NotificationsModule, AdminNotificationsModule],
   providers: [UsersService],
-  controllers: [UsersController]
+  controllers: [UsersController],
 })
 export class UsersModule {}

@@ -14,16 +14,21 @@ import {
   HttpStatus,
   ForbiddenException,
   BadRequestException,
-} from '@nestjs/common'
-import { PaymentsService } from './payments.service'
-import { AuthGuard } from '@nestjs/passport'
-import { FileInterceptor } from '@nestjs/platform-express'
-import { memoryStorage } from 'multer'
-import { GcsService } from '../gcs.service'
+} from '@nestjs/common';
+import { PaymentsService } from './payments.service';
+import { AuthGuard } from '@nestjs/passport';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import { GcsService } from '../gcs.service';
 
 // SECURITY FIX: Definisi konstanta validasi file upload
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024 // 5 MB
+const ALLOWED_MIME_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+];
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 @UseGuards(AuthGuard('jwt'))
 @Controller('payments')
@@ -35,14 +40,16 @@ export class PaymentsController {
 
   private requireAdmin(req: any) {
     if (req.user?.type !== 'admin') {
-      throw new ForbiddenException('Hanya admin yang boleh mengakses endpoint ini')
+      throw new ForbiddenException(
+        'Hanya admin yang boleh mengakses endpoint ini',
+      );
     }
   }
 
   @Get('stats')
   getStats(@Request() req: any) {
-    this.requireAdmin(req)
-    return this.paymentsService.getStats()
+    this.requireAdmin(req);
+    return this.paymentsService.getStats();
   }
 
   @Get()
@@ -54,24 +61,24 @@ export class PaymentsController {
     @Query('limit') limit?: string,
   ) {
     // User hanya bisa lihat pembayarannya sendiri; admin bisa lihat semua
-    const filterUserId = req.user?.type === 'admin' ? userId : req.user.id
+    const filterUserId = req.user?.type === 'admin' ? userId : req.user.id;
 
     return this.paymentsService.findAll({
       status,
       userId: filterUserId,
       page: page ? parseInt(page, 10) : 1,
       limit: limit ? parseInt(limit, 10) : 10,
-    })
+    });
   }
 
   @Get(':id')
   async findOne(@Param('id') id: string, @Request() req: any) {
-    const payment = await this.paymentsService.findOne(id)
+    const payment = await this.paymentsService.findOne(id);
     // SECURITY FIX: Cegah IDOR — user hanya boleh lihat pembayaran miliknya sendiri
     if (req.user?.type !== 'admin' && payment.userId !== req.user.id) {
-      throw new ForbiddenException('Tidak memiliki akses ke pembayaran ini')
+      throw new ForbiddenException('Tidak memiliki akses ke pembayaran ini');
     }
-    return payment
+    return payment;
   }
 
   // ── Submit pembayaran (user) ───────────────────────────────────────────────
@@ -85,11 +92,13 @@ export class PaymentsController {
         // SECURITY FIX: Validasi MIME type file bukti pembayaran
         if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
           return callback(
-            new BadRequestException('Hanya file JPG, PNG, dan WebP yang diizinkan'),
+            new BadRequestException(
+              'Hanya file JPG, PNG, dan WebP yang diizinkan',
+            ),
             false,
-          )
+          );
         }
-        callback(null, true)
+        callback(null, true);
       },
     }),
   )
@@ -100,17 +109,19 @@ export class PaymentsController {
   ) {
     try {
       if (!body.invoiceId) {
-        throw new BadRequestException('ID Tagihan (invoiceId) tidak ditemukan dari form')
+        throw new BadRequestException(
+          'ID Tagihan (invoiceId) tidak ditemukan dari form',
+        );
       }
 
-      let proofImageUrl = ''
+      let proofImageUrl = '';
 
       if (file) {
         // SECURITY FIX: Double-check ukuran file setelah upload
         if (file.size > MAX_FILE_SIZE_BYTES) {
-          throw new BadRequestException('Ukuran file maksimal 5 MB')
+          throw new BadRequestException('Ukuran file maksimal 5 MB');
         }
-        proofImageUrl = await this.gcsService.uploadFile(file, 'payments')
+        proofImageUrl = await this.gcsService.uploadFile(file, 'payments');
       }
 
       const paymentData = {
@@ -120,22 +131,22 @@ export class PaymentsController {
         proofImageUrl,
         // SECURITY FIX: Hapus amount dari input — amount diambil dari invoice di service
         // (mencegah user manipulasi jumlah pembayaran)
-      }
+      };
 
-      return await this.paymentsService.submit(req.user.id, paymentData)
+      return await this.paymentsService.submit(req.user.id, paymentData);
     } catch (error: any) {
       throw new HttpException(
         error.message || 'Gagal memproses pembayaran',
         error.status || HttpStatus.BAD_REQUEST,
-      )
+      );
     }
   }
 
   // ── Approve / Reject — hanya admin ───────────────────────────────────────
   @Patch(':id/approve')
   approve(@Param('id') id: string, @Request() req: any) {
-    this.requireAdmin(req)
-    return this.paymentsService.approve(id, req.user.id)
+    this.requireAdmin(req);
+    return this.paymentsService.approve(id, req.user.id);
   }
 
   @Patch(':id/reject')
@@ -144,10 +155,10 @@ export class PaymentsController {
     @Request() req: any,
     @Body() body: { reason: string },
   ) {
-    this.requireAdmin(req)
+    this.requireAdmin(req);
     if (!body.reason || body.reason.trim().length === 0) {
-      throw new BadRequestException('Alasan penolakan wajib diisi')
+      throw new BadRequestException('Alasan penolakan wajib diisi');
     }
-    return this.paymentsService.reject(id, req.user.id, body.reason)
+    return this.paymentsService.reject(id, req.user.id, body.reason);
   }
 }

@@ -1,6 +1,17 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Request, ForbiddenException } from '@nestjs/common'
-import { BillingService } from './billing.service'
-import { AuthGuard } from '@nestjs/passport'
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  Request,
+  ForbiddenException,
+} from '@nestjs/common';
+import { BillingService } from './billing.service';
+import { AuthGuard } from '@nestjs/passport';
 
 @UseGuards(AuthGuard('jwt'))
 @Controller('billing')
@@ -10,14 +21,14 @@ export class BillingController {
   // SECURITY FIX: Helper untuk memastikan hanya admin yang bisa mengakses
   private requireAdmin(req: any) {
     if (req.user?.type !== 'admin') {
-      throw new ForbiddenException('Hanya admin yang boleh mengakses')
+      throw new ForbiddenException('Hanya admin yang boleh mengakses');
     }
   }
 
   @Get('stats')
   getStats(@Request() req: any) {
-    this.requireAdmin(req)
-    return this.billingService.getStats()
+    this.requireAdmin(req);
+    return this.billingService.getStats();
   }
 
   // 👇 PERUBAHAN UNTUK USER: Hapus requireAdmin & Kunci ID Pencarian 👇
@@ -33,7 +44,7 @@ export class BillingController {
   ) {
     // Kita tentukan target pencarian userId
     let targetUserId = userId;
-    
+
     // Jika yang login BUKAN admin, paksa target pencarian ke ID dia sendiri
     if (req.user?.type !== 'admin') {
       targetUserId = req.user.id;
@@ -46,13 +57,13 @@ export class BillingController {
       year: year ? parseInt(year) : undefined,
       page: page ? parseInt(page) : 1,
       limit: limit ? parseInt(limit) : 10,
-    })
+    });
   }
 
   // 👇 PERUBAHAN UNTUK USER: Hapus requireAdmin agar bisa lihat detail 👇
   @Get(':id')
   findOne(@Param('id') id: string, @Request() req: any) {
-    return this.billingService.findOne(id)
+    return this.billingService.findOne(id);
   }
 
   @Post('generate/:userId')
@@ -61,8 +72,13 @@ export class BillingController {
     @Request() req: any,
     @Body() body: { billingMonth?: number; billingYear?: number },
   ) {
-    this.requireAdmin(req)
-    return this.billingService.generateInvoice(userId, req.user.id, body.billingMonth, body.billingYear)
+    this.requireAdmin(req);
+    return this.billingService.generateInvoice(
+      userId,
+      req.user.id,
+      body.billingMonth,
+      body.billingYear,
+    );
   }
 
   @Post('generate-bulk')
@@ -70,13 +86,17 @@ export class BillingController {
     @Request() req: any,
     @Body() body: { billingMonth?: number; billingYear?: number },
   ) {
-    this.requireAdmin(req)
-    return this.billingService.generateBulkInvoices(req.user.id, body.billingMonth, body.billingYear)
+    this.requireAdmin(req);
+    return this.billingService.generateBulkInvoices(
+      req.user.id,
+      body.billingMonth,
+      body.billingYear,
+    );
   }
 
   @Patch(':id/penalty')
   addPenalty(@Param('id') id: string, @Request() req: any) {
-    this.requireAdmin(req)
-    return this.billingService.addPenalty(id)
+    this.requireAdmin(req);
+    return this.billingService.addPenalty(id);
   }
 }

@@ -4,7 +4,7 @@ import { Prisma, ServiceRequestType } from '@prisma/client';
 
 @Injectable()
 export class ServiceRequestsService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   async checkActiveRequest(userId: string) {
     const latestRequest = await this.prisma.serviceRequest.findFirst({
@@ -34,40 +34,46 @@ export class ServiceRequestsService {
     }
 
     const newRequest = await this.prisma.serviceRequest.create({
-    data: { userId, type, requestData },
-  });
+      data: { userId, type, requestData },
+    });
 
     const user = await this.prisma.user.findUnique({
-    where: { id: userId },
-    select: { fullName: true, customerCode: true },
-  });
+      where: { id: userId },
+      select: { fullName: true, customerCode: true },
+    });
 
     const requestTypeLabel =
-    type === 'PACKAGE_CHANGE'
-      ? 'Ganti Paket'
-      : type === 'ADDRESS_MOVE'
-        ? 'Pindah Alamat'
-        : 'Putus Berlangganan';
+      type === 'PACKAGE_CHANGE'
+        ? 'Ganti Paket'
+        : type === 'ADDRESS_MOVE'
+          ? 'Pindah Alamat'
+          : 'Putus Berlangganan';
 
     await this.prisma.adminNotification.create({
-    data: {
-      title: `Pengajuan ${requestTypeLabel}`, // ← Tanpa "Baru" agar lebih bersih
-      message: `Pelanggan ${user?.fullName} (${user?.customerCode}) mengajukan permohonan ${requestTypeLabel}. Segera tinjau pengajuan ini.`,
-      category: 'SYSTEM',
-      link: '/admin/permintaan',
-      isUrgent: type === 'CANCELLATION',
-      metadata: {
-        requestId: newRequest.id,   // ✅ FIX: Tambahkan requestId
-        userId: userId,
-        ...(type === 'PACKAGE_CHANGE' && { newPackageId: (requestData as any).newPackageId }),
-        ...(type === 'ADDRESS_MOVE' && { newAddress: (requestData as any).newAddress }),
-        ...(type === 'CANCELLATION' && { reason: (requestData as any).reason }),
+      data: {
+        title: `Pengajuan ${requestTypeLabel}`, // ← Tanpa "Baru" agar lebih bersih
+        message: `Pelanggan ${user?.fullName} (${user?.customerCode}) mengajukan permohonan ${requestTypeLabel}. Segera tinjau pengajuan ini.`,
+        category: 'SYSTEM',
+        link: '/admin/permintaan',
+        isUrgent: type === 'CANCELLATION',
+        metadata: {
+          requestId: newRequest.id, // ✅ FIX: Tambahkan requestId
+          userId: userId,
+          ...(type === 'PACKAGE_CHANGE' && {
+            newPackageId: (requestData as any).newPackageId,
+          }),
+          ...(type === 'ADDRESS_MOVE' && {
+            newAddress: (requestData as any).newAddress,
+          }),
+          ...(type === 'CANCELLATION' && {
+            reason: (requestData as any).reason,
+          }),
+        },
       },
-    },
-  });
+    });
 
-  return newRequest;
-}
+    return newRequest;
+  }
 
   async updateRequestStatusByAdmin(
     requestId: string,

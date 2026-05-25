@@ -1,6 +1,18 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Request, ForbiddenException, BadRequestException } from '@nestjs/common'
-import { TicketsService } from './tickets.service'
-import { AuthGuard } from '@nestjs/passport'
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  Request,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
+import { TicketsService } from './tickets.service';
+import { AuthGuard } from '@nestjs/passport';
 
 @UseGuards(AuthGuard('jwt'))
 @Controller('tickets')
@@ -10,14 +22,14 @@ export class TicketsController {
   // SECURITY FIX: Helper untuk memastikan hanya admin yang bisa mengakses
   private requireAdmin(req: any) {
     if (req.user?.type !== 'admin') {
-      throw new ForbiddenException('Hanya admin yang boleh mengakses')
+      throw new ForbiddenException('Hanya admin yang boleh mengakses');
     }
   }
 
   @Get('stats')
   getStats(@Request() req: any) {
-    this.requireAdmin(req)
-    return this.ticketsService.getStats()
+    this.requireAdmin(req);
+    return this.ticketsService.getStats();
   }
 
   @Get()
@@ -34,23 +46,27 @@ export class TicketsController {
       userId,
       page: page ? parseInt(page) : 1,
       limit: limit ? parseInt(limit) : 10,
-    })
+    });
   }
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.ticketsService.findOne(id)
+    return this.ticketsService.findOne(id);
   }
 
   @Post()
-  create(@Request() req: any, @Body() body: {
-    title: string
-    description: string
-    category: string
-    priority?: string
-    attachmentUrl?: string
-  }) {
-    return this.ticketsService.create(req.user.id, body)
+  create(
+    @Request() req: any,
+    @Body()
+    body: {
+      title: string;
+      description: string;
+      category: string;
+      priority?: string;
+      attachmentUrl?: string;
+    },
+  ) {
+    return this.ticketsService.create(req.user.id, body);
   }
 
   @Post(':id/reply')
@@ -59,14 +75,14 @@ export class TicketsController {
     @Request() req: any,
     @Body() body: { message: string; attachmentUrl?: string },
   ) {
-    const isAdmin = req.user.type === 'admin'
+    const isAdmin = req.user.type === 'admin';
     return this.ticketsService.reply(id, {
       message: body.message,
       isFromAdmin: isAdmin,
       userId: req.user.id,
       adminId: isAdmin ? req.user.id : undefined,
       attachmentUrl: body.attachmentUrl,
-    })
+    });
   }
 
   @Patch(':id/status')
@@ -77,13 +93,15 @@ export class TicketsController {
   ) {
     // SECURITY FIX: Hanya admin yang bisa ubah status tiket
     if (req.user?.type !== 'admin') {
-      throw new ForbiddenException('Hanya admin yang bisa mengubah status tiket')
+      throw new ForbiddenException(
+        'Hanya admin yang bisa mengubah status tiket',
+      );
     }
     // SECURITY FIX: Validasi status agar tidak bisa diisi string sembarang
-    const validStatuses = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED']
+    const validStatuses = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
     if (!validStatuses.includes(body.status)) {
-      throw new BadRequestException('Status tiket tidak valid')
+      throw new BadRequestException('Status tiket tidak valid');
     }
-    return this.ticketsService.updateStatus(id, body.status)
+    return this.ticketsService.updateStatus(id, body.status);
   }
 }

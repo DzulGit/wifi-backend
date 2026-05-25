@@ -60,12 +60,13 @@ export class BillingScheduler {
           category: 'BILLING',
           link: '/admin/pelanggan?status=SUSPENDED',
           isUrgent: true,
-          metadata: { totalSuspended: suspendedCount }
+          metadata: { totalSuspended: suspendedCount },
         });
 
-        this.logger.log(`Berhasil mengisolir ${suspendedCount} pelanggan yang nunggak.`);
+        this.logger.log(
+          `Berhasil mengisolir ${suspendedCount} pelanggan yang nunggak.`,
+        );
       }
-
     } catch (error) {
       this.logger.error('Gagal menjalankan cron job auto-suspend', error);
     }

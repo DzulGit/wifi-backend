@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, UseGuards, Req, Patch, Param } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  UseGuards,
+  Req,
+  Patch,
+  Param,
+} from '@nestjs/common';
 import { ServiceRequestsService } from './service-requests.service';
 import { ServiceRequestType } from '@prisma/client';
 import { AuthGuard } from '@nestjs/passport';
@@ -6,7 +15,9 @@ import { AuthGuard } from '@nestjs/passport';
 @Controller('service-requests')
 @UseGuards(AuthGuard('jwt')) // 👈 Aktifkan guard auth kamu di sini agar bisa mengambil data user login
 export class ServiceRequestsController {
-  constructor(private readonly serviceRequestsService: ServiceRequestsService) {}
+  constructor(
+    private readonly serviceRequestsService: ServiceRequestsService,
+  ) {}
 
   // 👇 INI YANG KURANG KEMAREN BANG: Endpoint untuk Admin menarik semua antrean
   @Get('admin/all')
@@ -18,7 +29,7 @@ export class ServiceRequestsController {
   @Get('active')
   async getActiveRequest(@Req() req: any) {
     // Ambil userId dari token login (sesuaikan dengan struktur req.user kamu)
-    const userId = req.user?.id || req.user?.sub; 
+    const userId = req.user?.id || req.user?.sub;
     return this.serviceRequestsService.checkActiveRequest(userId);
   }
 
@@ -40,6 +51,10 @@ export class ServiceRequestsController {
     @Body('status') status: 'APPROVED' | 'REJECTED',
     @Body('adminNotes') adminNotes?: string,
   ) {
-    return this.serviceRequestsService.updateRequestStatusByAdmin(id, status, adminNotes);
+    return this.serviceRequestsService.updateRequestStatusByAdmin(
+      id,
+      status,
+      adminNotes,
+    );
   }
 }

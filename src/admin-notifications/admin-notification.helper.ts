@@ -1,5 +1,5 @@
-import { AdminNotificationCategory } from '@prisma/client'
-import { AdminNotificationsService } from './admin-notifications.service'
+import { AdminNotificationCategory } from '@prisma/client';
+import { AdminNotificationsService } from './admin-notifications.service';
 
 /**
  * Helper class to emit admin notifications from business logic services
@@ -13,13 +13,13 @@ export class AdminNotificationHelper {
   static async paymentReceived(
     service: AdminNotificationsService,
     data: {
-      userName: string
-      customerCode: string
-      invoiceNumber: string
-      paymentCode: string
-      amount: number
-      paymentId: string
-      invoiceId: string
+      userName: string;
+      customerCode: string;
+      invoiceNumber: string;
+      paymentCode: string;
+      amount: number;
+      paymentId: string;
+      invoiceId: string;
     },
   ) {
     return service.create({
@@ -29,18 +29,18 @@ export class AdminNotificationHelper {
       link: `/admin/pembayaran/${data.paymentId}`,
       isUrgent: false,
       metadata: { paymentId: data.paymentId, invoiceId: data.invoiceId },
-    })
+    });
   }
 
   static async paymentApproved(
     service: AdminNotificationsService,
     data: {
-      userName: string
-      customerCode: string
-      invoiceNumber: string
-      amount: number
-      paymentId: string
-      invoiceId: string
+      userName: string;
+      customerCode: string;
+      invoiceNumber: string;
+      amount: number;
+      paymentId: string;
+      invoiceId: string;
     },
   ) {
     return service.create({
@@ -50,18 +50,18 @@ export class AdminNotificationHelper {
       link: `/admin/pembayaran/${data.paymentId}`,
       isUrgent: false,
       metadata: { paymentId: data.paymentId, invoiceId: data.invoiceId },
-    })
+    });
   }
 
   static async paymentRejected(
     service: AdminNotificationsService,
     data: {
-      userName: string
-      customerCode: string
-      invoiceNumber: string
-      reason: string
-      paymentId: string
-      invoiceId: string
+      userName: string;
+      customerCode: string;
+      invoiceNumber: string;
+      reason: string;
+      paymentId: string;
+      invoiceId: string;
     },
   ) {
     return service.create({
@@ -71,7 +71,7 @@ export class AdminNotificationHelper {
       link: `/admin/pembayaran/${data.paymentId}`,
       isUrgent: true,
       metadata: { paymentId: data.paymentId, invoiceId: data.invoiceId },
-    })
+    });
   }
 
   // ───────────────────────────────────────────────────────────────
@@ -81,14 +81,14 @@ export class AdminNotificationHelper {
   static async ticketCreated(
     service: AdminNotificationsService,
     data: {
-      userName: string
-      ticketNumber: string
-      title: string
-      priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
-      ticketId: string
+      userName: string;
+      ticketNumber: string;
+      title: string;
+      priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+      ticketId: string;
     },
   ) {
-    const isUrgent = data.priority === 'HIGH' || data.priority === 'CRITICAL'
+    const isUrgent = data.priority === 'HIGH' || data.priority === 'CRITICAL';
     return service.create({
       title: `🎫 Tiket Baru (${data.priority})`,
       message: `${data.userName} membuat tiket #${data.ticketNumber}: "${data.title}"`,
@@ -96,15 +96,15 @@ export class AdminNotificationHelper {
       link: `/admin/tiket/${data.ticketId}`,
       isUrgent,
       metadata: { ticketId: data.ticketId },
-    })
+    });
   }
 
   static async ticketReplied(
     service: AdminNotificationsService,
     data: {
-      ticketNumber: string
-      replierName: string
-      ticketId: string
+      ticketNumber: string;
+      replierName: string;
+      ticketId: string;
     },
   ) {
     return service.create({
@@ -114,7 +114,7 @@ export class AdminNotificationHelper {
       link: `/admin/tiket/${data.ticketId}`,
       isUrgent: false,
       metadata: { ticketId: data.ticketId },
-    })
+    });
   }
 
   // ───────────────────────────────────────────────────────────────
@@ -124,12 +124,12 @@ export class AdminNotificationHelper {
   static async invoiceCreated(
     service: AdminNotificationsService,
     data: {
-      invoiceNumber: string
-      userName: string
-      customerCode: string
-      amount: number
-      dueDate: Date
-      invoiceId: string
+      invoiceNumber: string;
+      userName: string;
+      customerCode: string;
+      amount: number;
+      dueDate: Date;
+      invoiceId: string;
     },
   ) {
     return service.create({
@@ -139,18 +139,18 @@ export class AdminNotificationHelper {
       link: `/admin/tagihan/${data.invoiceId}`,
       isUrgent: false,
       metadata: { invoiceId: data.invoiceId },
-    })
+    });
   }
 
   static async invoiceOverdue(
     service: AdminNotificationsService,
     data: {
-      invoiceNumber: string
-      userName: string
-      customerCode: string
-      totalAmount: number
-      daysOverdue: number
-      invoiceId: string
+      invoiceNumber: string;
+      userName: string;
+      customerCode: string;
+      totalAmount: number;
+      daysOverdue: number;
+      invoiceId: string;
     },
   ) {
     return service.create({
@@ -160,7 +160,7 @@ export class AdminNotificationHelper {
       link: `/admin/tagihan/${data.invoiceId}`,
       isUrgent: true,
       metadata: { invoiceId: data.invoiceId },
-    })
+    });
   }
 
   // ───────────────────────────────────────────────────────────────
@@ -170,9 +170,9 @@ export class AdminNotificationHelper {
   static async accountActivated(
     service: AdminNotificationsService,
     data: {
-      userName: string
-      customerCode: string
-      userId: string
+      userName: string;
+      customerCode: string;
+      userId: string;
     },
   ) {
     return service.create({
@@ -182,16 +182,16 @@ export class AdminNotificationHelper {
       link: `/admin/pelanggan/${data.userId}`,
       isUrgent: false,
       metadata: { userId: data.userId },
-    })
+    });
   }
 
   static async accountSuspended(
     service: AdminNotificationsService,
     data: {
-      userName: string
-      customerCode: string
-      reason: string
-      userId: string
+      userName: string;
+      customerCode: string;
+      reason: string;
+      userId: string;
     },
   ) {
     return service.create({
@@ -201,7 +201,7 @@ export class AdminNotificationHelper {
       link: `/admin/pelanggan/${data.userId}`,
       isUrgent: true,
       metadata: { userId: data.userId },
-    })
+    });
   }
 
   // ───────────────────────────────────────────────────────────────
@@ -211,10 +211,10 @@ export class AdminNotificationHelper {
   static async registrationCreated(
     service: AdminNotificationsService,
     data: {
-      fullName: string
-      phone: string
-      packageName: string
-      registrationId: string
+      fullName: string;
+      phone: string;
+      packageName: string;
+      registrationId: string;
     },
   ) {
     return service.create({
@@ -224,15 +224,15 @@ export class AdminNotificationHelper {
       link: `/admin/pendaftar/${data.registrationId}`,
       isUrgent: false,
       metadata: { registrationId: data.registrationId },
-    })
+    });
   }
 
   static async systemAlert(
     service: AdminNotificationsService,
     data: {
-      title: string
-      message: string
-      link?: string
+      title: string;
+      message: string;
+      link?: string;
     },
   ) {
     return service.create({
@@ -242,6 +242,6 @@ export class AdminNotificationHelper {
       link: data.link,
       isUrgent: false,
       metadata: {},
-    })
+    });
   }
 }

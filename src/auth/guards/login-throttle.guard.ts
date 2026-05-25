@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common'
-import { ThrottlerGuard } from '@nestjs/throttler'
+import { Injectable } from '@nestjs/common';
+import { ThrottlerGuard } from '@nestjs/throttler';
 
 @Injectable()
 export class LoginThrottleGuard extends ThrottlerGuard {
@@ -11,14 +11,15 @@ export class LoginThrottleGuard extends ThrottlerGuard {
       req.ip ||
       req.connection?.remoteAddress ||
       req.socket?.remoteAddress ||
-      'unknown'
+      'unknown';
 
     // Normalisasi email ke lowercase untuk konsistensi tracking
-    const email = (req.body?.email ?? 'unknown').toLowerCase().trim()
+    const email = (req.body?.email ?? 'unknown').toLowerCase().trim();
 
     // Track per kombinasi IP + email untuk spesifisitas lebih tinggi
-    return `login:${ip}:${email}`
+    return `login:${ip}:${email}`;
   }
 
-  protected errorMessage = 'Terlalu banyak percobaan login. Coba lagi dalam 15 menit.'
+  protected errorMessage =
+    'Terlalu banyak percobaan login. Coba lagi dalam 15 menit.';
 }

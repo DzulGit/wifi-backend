@@ -1,4 +1,13 @@
-import { Controller, Get, Patch, Delete, Param, Query, UseGuards, Request } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Patch,
+  Delete,
+  Param,
+  Query,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { AuthGuard } from '@nestjs/passport';
 
@@ -10,16 +19,19 @@ export class NotificationsController {
   @Get()
   async getNotifications(
     @Request() req: any,
-    @Query('isRead') isRead?: string // 👈 Tangkap parameter dari URL (opsional)
+    @Query('isRead') isRead?: string, // 👈 Tangkap parameter dari URL (opsional)
   ) {
     const userId = req.user.id;
-    
+
     // Ubah string 'true'/'false' dari URL menjadi tipe boolean yang asli
     let readFilter: boolean | undefined = undefined;
     if (isRead === 'true') readFilter = true;
     if (isRead === 'false') readFilter = false;
 
-    const data = await this.notificationsService.getAppNotifications(userId, readFilter);
+    const data = await this.notificationsService.getAppNotifications(
+      userId,
+      readFilter,
+    );
     return { data };
   }
 

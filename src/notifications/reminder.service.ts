@@ -18,7 +18,7 @@ export class ReminderService {
   @Cron('0 1 * * *')
   async handleInvoiceReminders() {
     this.logger.log('Menjalankan robot pengecekan tagihan...');
-    
+
     // Ambil tanggal hari ini (jam 00:00)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -65,7 +65,9 @@ export class ReminderService {
           message: reminderMessage,
           metadata: { url: `/dashboard/tagihan/${invoice.id}` }, // 👈 Langsung nge-link ke detail invoice!
         });
-        this.logger.log(`[Berhasil] Reminder ${reminderTitle} dikirim ke ${invoice.user.fullName}`);
+        this.logger.log(
+          `[Berhasil] Reminder ${reminderTitle} dikirim ke ${invoice.user.fullName}`,
+        );
       }
     }
   }

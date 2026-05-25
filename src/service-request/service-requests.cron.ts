@@ -26,12 +26,13 @@ export class ServiceRequestsCron {
       // ===================================================================
       // TAHAP 1: VALIDASI SUSPEND (3 Bulan Gak Langganan Lagi)
       // ===================================================================
-      
+
       // Cari user aktif/nonaktif biasa yang request putus langganannya sudah di-approve >= 3 bulan lalu
       const userAkanSuspend = await this.prisma.user.findMany({
         where: {
           status: { in: ['ACTIVE', 'INACTIVE'] }, // Sesuaikan dengan enum status User di projekmu
-          ServiceRequest: { // 👈 INI YANG DIGANTI (Huruf 'S' besar, tanpa 's' di akhir)
+          ServiceRequest: {
+            // 👈 INI YANG DIGANTI (Huruf 'S' besar, tanpa 's' di akhir)
             some: {
               type: 'CANCELLATION',
               status: 'APPROVED',
@@ -44,25 +45,28 @@ export class ServiceRequestsCron {
 
       if (userAkanSuspend.length > 0) {
         const ids = userAkanSuspend.map((u) => u.id);
-        
+
         // Update status user menjadi SUSPENDED
         await this.prisma.user.updateMany({
           where: { id: { in: ids } },
           data: { status: 'SUSPENDED' }, // Pastikan 'SUSPENDED' udah ditambahin di schema.prisma
         });
 
-        this.logger.log(`Berhasil men-suspend ${userAkanSuspend.length} akun karena 3 bulan tidak berlangganan.`);
+        this.logger.log(
+          `Berhasil men-suspend ${userAkanSuspend.length} akun karena 3 bulan tidak berlangganan.`,
+        );
       }
 
       // ===================================================================
       // TAHAP 2: VALIDASI PENGHAPUSAN / ARCHIVE (6 Bulan Total Gak Langganan)
       // ===================================================================
-      
+
       // Cari user yang statusnya sudah SUSPENDED dan request putus langganannya sudah lewat 6 bulan
       const userAkanDihapus = await this.prisma.user.findMany({
         where: {
           status: 'SUSPENDED',
-          ServiceRequest: { // 👈 INI JUGA DIGANTI (Huruf 'S' besar, tanpa 's' di akhir)
+          ServiceRequest: {
+            // 👈 INI JUGA DIGANTI (Huruf 'S' besar, tanpa 's' di akhir)
             some: {
               type: 'CANCELLATION',
               status: 'APPROVED',
@@ -82,9 +86,10 @@ export class ServiceRequestsCron {
           data: { status: 'DELETED' }, // Pastikan 'DELETED' udah ditambahin di schema.prisma
         });
 
-        this.logger.log(`Berhasil menghapus/mengarsipkan ${userAkanDihapus.length} akun yang melewati masa tenggang 6 bulan.`);
+        this.logger.log(
+          `Berhasil menghapus/mengarsipkan ${userAkanDihapus.length} akun yang melewati masa tenggang 6 bulan.`,
+        );
       }
-
     } catch (error) {
       this.logger.error('Gagal menjalankan otomatisasi lifecycle akun:', error);
     }

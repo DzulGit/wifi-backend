@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationType } from '@prisma/client';
@@ -79,7 +83,9 @@ export class NotificationsService {
     if (!notif) throw new NotFoundException('Notifikasi tidak ditemukan');
 
     if (notif.userId !== userId) {
-      throw new ForbiddenException('Anda tidak berhak menghapus notifikasi ini');
+      throw new ForbiddenException(
+        'Anda tidak berhak menghapus notifikasi ini',
+      );
     }
 
     return this.prisma.notification.update({
@@ -91,7 +97,7 @@ export class NotificationsService {
   // Fitur hapus semua notifikasi milik user
   async deleteAll(userId: string) {
     return this.prisma.notification.deleteMany({
-      where: { userId: userId }
+      where: { userId: userId },
     });
   }
 
@@ -142,14 +148,18 @@ export class NotificationsService {
           </p>
         </div>
       `,
-      })
-      console.log(`✅ OTP email sent to ${email}`)
+      });
+      console.log(`✅ OTP email sent to ${email}`);
     } catch (error) {
-      console.error(`❌ Failed to send OTP email to ${email}:`, error)
+      console.error(`❌ Failed to send OTP email to ${email}:`, error);
     }
   }
 
-  async sendActivationEmail(email: string, name: string, activationLink: string) {
+  async sendActivationEmail(
+    email: string,
+    name: string,
+    activationLink: string,
+  ) {
     try {
       await this.transporter.sendMail({
         from: `"CAKRANA WiFi" <${process.env.GMAIL_USER}>`,
@@ -172,10 +182,10 @@ export class NotificationsService {
           <p style="color:#888;font-size:12px">Link berlaku <strong>7 hari</strong>.</p>
         </div>
       `,
-      })
-      console.log(`✅ Activation email sent to ${email}`)
+      });
+      console.log(`✅ Activation email sent to ${email}`);
     } catch (error) {
-      console.error(`❌ Failed to send activation email to ${email}:`, error)
+      console.error(`❌ Failed to send activation email to ${email}:`, error);
     }
   }
 }

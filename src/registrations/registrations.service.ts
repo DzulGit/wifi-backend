@@ -2,12 +2,12 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-} from '@nestjs/common'
-import { PrismaService } from '../prisma/prisma.service'
-import { NotificationsService } from '../notifications/notifications.service'
-import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service'
-import { AdminNotificationHelper } from '../admin-notifications/admin-notification.helper'
-import { randomBytes } from 'crypto'
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
+import { AdminNotificationHelper } from '../admin-notifications/admin-notification.helper';
+import { randomBytes } from 'crypto';
 
 @Injectable()
 export class RegistrationsService {
@@ -19,16 +19,16 @@ export class RegistrationsService {
 
   // ── Submit pendaftaran (dari landing page — public endpoint) ──────────────
   async submit(data: {
-    fullName: string
-    phone: string
-    email?: string
-    address: string
-    district?: string
-    city?: string
-    packageId: string
-    notes?: string
-    latitude?: number
-    longitude?: number
+    fullName: string;
+    phone: string;
+    email?: string;
+    address: string;
+    district?: string;
+    city?: string;
+    packageId: string;
+    notes?: string;
+    latitude?: number;
+    longitude?: number;
   }) {
     // SECURITY FIX: Validasi koordinat jika disertakan
     if (data.latitude !== undefined || data.longitude !== undefined) {
@@ -40,79 +40,84 @@ export class RegistrationsService {
         data.longitude < -180 ||
         data.longitude > 180
       ) {
-        throw new BadRequestException('Koordinat lokasi tidak valid')
+        throw new BadRequestException('Koordinat lokasi tidak valid');
       }
     }
 
     // SECURITY FIX: Batasi panjang notes agar tidak bisa dipakai untuk injection
     if (data.notes && data.notes.length > 500) {
-      throw new BadRequestException('Catatan maksimal 500 karakter')
+      throw new BadRequestException('Catatan maksimal 500 karakter');
     }
 
     const pkg = await this.prisma.package.findUnique({
       where: { id: data.packageId },
-    })
-    if (!pkg) throw new BadRequestException('Paket tidak ditemukan')
+    });
+    if (!pkg) throw new BadRequestException('Paket tidak ditemukan');
 
     // Cek nomor HP sudah pernah daftar
     const existing = await this.prisma.registration.findFirst({
       where: { phone: data.phone, status: { in: ['PENDING', 'APPROVED'] } },
-    })
+    });
     if (existing) {
-      throw new BadRequestException('Nomor HP sudah pernah mendaftar')
+      throw new BadRequestException('Nomor HP sudah pernah mendaftar');
     }
 
     // Cek nomor HP sudah jadi pelanggan aktif
     const activeUser = await this.prisma.user.findUnique({
       where: { phone: data.phone },
-    })
+    });
     if (activeUser) {
-      throw new BadRequestException('Nomor HP sudah terdaftar sebagai pelanggan')
+      throw new BadRequestException(
+        'Nomor HP sudah terdaftar sebagai pelanggan',
+      );
     }
 
     const registration = await this.prisma.registration.create({
       data: { ...data, status: 'PENDING' },
       include: { approvedBy: true },
-    })
+    });
 
     // 👇 ADMIN NOTIFICATION 👇
     if (pkg) {
-      await AdminNotificationHelper.registrationCreated(this.adminNotifications, {
-        fullName: registration.fullName,
-        phone: registration.phone,
-        packageName: pkg.name,
-        registrationId: registration.id,
-      });
+      await AdminNotificationHelper.registrationCreated(
+        this.adminNotifications,
+        {
+          fullName: registration.fullName,
+          phone: registration.phone,
+          packageName: pkg.name,
+          registrationId: registration.id,
+        },
+      );
     }
     // 👆 SELESAI 👆
 
     return {
       message: 'Pendaftaran berhasil! Admin akan menghubungi kamu segera.',
       registration,
-    }
+    };
   }
 
   // ── Get all registrations (admin) ─────────────────────────────────────────
   async findAll(query: {
-    status?: string
-    search?: string
-    page?: number
-    limit?: number
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
   }) {
-    const { status, search, page = 1, limit = 10 } = query
-    const skip = (page - 1) * limit
+    const { status, search, page = 1, limit = 10 } = query;
+    const skip = (page - 1) * limit;
 
     // SECURITY FIX: Batasi limit maksimum
-    const safeLimit = Math.min(limit, 100)
+    const safeLimit = Math.min(limit, 100);
 
-    const where: any = {}
-    if (status) where.status = status
+    const where: any = {};
+    if (status) where.status = status;
     if (search) {
       where.OR = [
         { fullName: { contains: search, mode: 'insensitive' } },
         { phone: { contains: search } },
         { email: { contains: search, mode: 'insensitive' } },
-      ]
+      ];
     }
 
     const [data, total] = await Promise.all([
@@ -128,12 +133,17 @@ export class RegistrationsService {
         },
       }),
       this.prisma.registration.count({ where }),
-    ])
+    ]);
 
     return {
       data,
-      meta: { total, page, limit: safeLimit, totalPages: Math.ceil(total / safeLimit) },
-    }
+      meta: {
+        total,
+        page,
+        limit: safeLimit,
+        totalPages: Math.ceil(total / safeLimit),
+      },
+    };
   }
 
   // ── Get one registration ──────────────────────────────────────────────────
@@ -144,9 +154,9 @@ export class RegistrationsService {
         approvedBy: { select: { fullName: true, email: true } },
         user: { select: { id: true, customerCode: true, status: true } },
       },
-    })
-    if (!reg) throw new NotFoundException('Pendaftaran tidak ditemukan')
-    return reg
+    });
+    if (!reg) throw new NotFoundException('Pendaftaran tidak ditemukan');
+    return reg;
   }
 
   // ── Approve pendaftaran ───────────────────────────────────────────────────
@@ -154,18 +164,18 @@ export class RegistrationsService {
     const reg = await this.prisma.registration.findUnique({
       where: { id },
       include: { user: true },
-    })
-    if (!reg) throw new NotFoundException('Pendaftaran tidak ditemukan')
+    });
+    if (!reg) throw new NotFoundException('Pendaftaran tidak ditemukan');
     if (reg.status !== 'PENDING') {
-      throw new BadRequestException('Pendaftaran sudah diproses sebelumnya')
+      throw new BadRequestException('Pendaftaran sudah diproses sebelumnya');
     }
 
-    const count = await this.prisma.user.count()
-    const customerCode = `WIFI-${String(count + 1).padStart(5, '0')}`
+    const count = await this.prisma.user.count();
+    const customerCode = `WIFI-${String(count + 1).padStart(5, '0')}`;
 
     // SECURITY FIX: Gunakan randomBytes(32) — sudah benar; panjang 64 hex chars
-    const activationToken = randomBytes(32).toString('hex')
-    const activationExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 hari
+    const activationToken = randomBytes(32).toString('hex');
+    const activationExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 hari
 
     const user = await this.prisma.user.create({
       data: {
@@ -182,7 +192,7 @@ export class RegistrationsService {
         packageId: reg.packageId,
         registrationId: reg.id,
       },
-    })
+    });
 
     await this.prisma.registration.update({
       where: { id },
@@ -191,34 +201,38 @@ export class RegistrationsService {
         approvedById: adminId,
         approvedAt: new Date(),
       },
-    })
+    });
 
     if (reg.email) {
       // SECURITY FIX: Validasi FRONTEND_URL ada sebelum membentuk link
-      const frontendUrl = process.env.FRONTEND_URL
+      const frontendUrl = process.env.FRONTEND_URL;
       if (!frontendUrl) {
-        throw new Error('FRONTEND_URL environment variable is not set')
+        throw new Error('FRONTEND_URL environment variable is not set');
       }
-      const activationLink = `${frontendUrl}/activate?token=${activationToken}`
-      await this.notifications.sendActivationEmail(reg.email, reg.fullName, activationLink)
+      const activationLink = `${frontendUrl}/activate?token=${activationToken}`;
+      await this.notifications.sendActivationEmail(
+        reg.email,
+        reg.fullName,
+        activationLink,
+      );
     }
 
     return {
       message: 'Pendaftaran diapprove, link aktivasi dikirim ke pelanggan',
       user: { id: user.id, customerCode: user.customerCode },
-    }
+    };
   }
 
   // ── Reject pendaftaran ────────────────────────────────────────────────────
   async reject(id: string, adminId: string, reason: string) {
     if (!reason || reason.trim().length === 0) {
-      throw new BadRequestException('Alasan penolakan wajib diisi')
+      throw new BadRequestException('Alasan penolakan wajib diisi');
     }
 
-    const reg = await this.prisma.registration.findUnique({ where: { id } })
-    if (!reg) throw new NotFoundException('Pendaftaran tidak ditemukan')
+    const reg = await this.prisma.registration.findUnique({ where: { id } });
+    if (!reg) throw new NotFoundException('Pendaftaran tidak ditemukan');
     if (reg.status !== 'PENDING') {
-      throw new BadRequestException('Pendaftaran sudah diproses sebelumnya')
+      throw new BadRequestException('Pendaftaran sudah diproses sebelumnya');
     }
 
     await this.prisma.registration.update({
@@ -229,9 +243,9 @@ export class RegistrationsService {
         approvedAt: new Date(),
         rejectedReason: reason.trim(),
       },
-    })
+    });
 
-    return { message: 'Pendaftaran ditolak' }
+    return { message: 'Pendaftaran ditolak' };
   }
 
   // ── Stats untuk dashboard admin ───────────────────────────────────────────
@@ -241,7 +255,7 @@ export class RegistrationsService {
       this.prisma.registration.count({ where: { status: 'PENDING' } }),
       this.prisma.registration.count({ where: { status: 'APPROVED' } }),
       this.prisma.registration.count({ where: { status: 'REJECTED' } }),
-    ])
-    return { total, pending, approved, rejected }
+    ]);
+    return { total, pending, approved, rejected };
   }
 }
