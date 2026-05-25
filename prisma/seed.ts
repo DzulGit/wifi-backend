@@ -103,7 +103,7 @@ async function main() {
     update: {},
     create: {
       fullName: 'Budi Santoso',
-      email: 'budi@gmail.com',
+      email: 'budisulistiyokds@gmail.com',
       phone: '081234567890',
       address: 'Jl. Merdeka No. 1, Samarinda',
       city: 'Samarinda',
