@@ -19,6 +19,7 @@ enum UserStatus {
   ACTIVE       // aktif berlangganan
   SUSPENDED    // disuspend (nunggak / manual admin)
   INACTIVE     // berhenti berlangganan
+  DELETED
 }
 
 enum AdminRole {
@@ -113,6 +114,7 @@ model User {
   tickets           Ticket[]
   otpCodes          OtpCode[]
   notifications     Notification[]
+  ServiceRequest    ServiceRequest[]
   loginLogs         LoginLog[]
   registrationId    String?     @unique
   registration      Registration? @relation(fields: [registrationId], references: [id])
@@ -146,6 +148,7 @@ model Admin {
   repliedTickets         TicketReply[]   @relation("RepliedBy")
   generatedInvoices      Invoice[]       @relation("GeneratedBy")
   loginLogs              LoginLog[]
+  processedRequests ServiceRequest[] @relation("ProcessedRequests")
 
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
@@ -368,6 +371,7 @@ model Notification {
   isSent      Boolean             @default(false)
   sentAt      DateTime?
   readAt      DateTime?
+  isDeleted   Boolean             @default(false)
   metadata    Json?               // data tambahan (invoiceId, dll)
 
   createdAt   DateTime            @default(now())
@@ -375,6 +379,7 @@ model Notification {
   @@index([userId])
   @@index([isRead])
   @@index([type])
+  @@index([isDeleted])
 }
 
 // ============================================================
@@ -399,6 +404,37 @@ model LoginLog {
 }
 
 // ============================================================
+// ADMIN NOTIFICATIONS (PERSISTED)
+// ============================================================
+
+enum AdminNotificationCategory {
+  FINANCE
+  SUPPORT
+  SYSTEM
+  ACCOUNT
+  BILLING
+  PACKAGE  
+  ADDRESS  
+  CANCEL  
+}
+
+model AdminNotification {
+  id          String                    @id @default(cuid())
+  title       String
+  message     String
+  category    AdminNotificationCategory
+  link        String?
+  isUrgent    Boolean                   @default(false)
+  isRead      Boolean                   @default(false)
+  metadata    Json?
+  createdAt   DateTime                  @default(now())
+
+  @@index([category])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+// ============================================================
 // SYSTEM SETTINGS
 // ============================================================
 
@@ -419,4 +455,48 @@ model Setting {
   // "company_logo_url"     → "https://..."
   // "wa_gateway_url"       → "https://..."
   // "wa_gateway_token"     → "xxx"
+}
+
+// ============================================================
+// SERVICE REQUEST (PENGAJUAN LAYANAN PELANGGAN)
+// ============================================================
+
+enum ServiceRequestType {
+  PACKAGE_CHANGE
+  ADDRESS_MOVE
+  CANCELLATION
+}
+
+enum ServiceRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model ServiceRequest {
+  id              String               @id @default(cuid())
+  userId          String
+  user            User                 @relation(fields: [userId], references: [id])
+  type            ServiceRequestType
+  status          ServiceRequestStatus @default(PENDING)
+  
+  // Data Spesifik (Disimpan dalam bentuk JSON biar fleksibel)
+  // Contoh Ganti Paket: { "oldPackageId": "pkg-1", "newPackageId": "pkg-2" }
+  // Contoh Pindah Alamat: { "oldAddress": "Jl. A", "newAddress": "Jl. B" }
+  // Contoh Putus: { "reason": "Pindah kota" }
+  requestData     Json
+  
+  adminNotes      String?              // Alasan admin kalau ditolak
+  
+  // Admin yang memproses
+  processedById   String?
+  processedBy     Admin?               @relation("ProcessedRequests", fields: [processedById], references: [id])
+  processedAt     DateTime?
+
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([type])
 }

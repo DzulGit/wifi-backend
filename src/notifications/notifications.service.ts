@@ -1,121 +1,181 @@
-import { Injectable } from '@nestjs/common'
-import * as nodemailer from 'nodemailer'
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import * as nodemailer from 'nodemailer';
+import { PrismaService } from '../prisma/prisma.service';
+import { NotificationType } from '@prisma/client';
 
 @Injectable()
 export class NotificationsService {
-  private transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.GMAIL_USER,
-      pass: process.env.GMAIL_PASS,
-    },
-  })
+  private transporter: nodemailer.Transporter;
+
+  constructor(private prisma: PrismaService) {
+    this.transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_PASS,
+      },
+    });
+  }
+
+  // ===========================================================================
+  // 1. FUNGSI UNTUK FRONTEND (GET, READ, & DELETE)
+  // ===========================================================================
+
+  async getAppNotifications(userId: string, isRead?: boolean) {
+    // Siapkan kondisi pencarian dasar
+    const whereClause: any = {
+      userId,
+      isDeleted: false, // 👈 PENTING: Hanya tampilkan yang belum dihapus
+    };
+
+    // Jika frontend mengirim parameter isRead (true/false)
+    if (isRead !== undefined) {
+      whereClause.isRead = isRead;
+    }
+
+    return this.prisma.notification.findMany({
+      where: whereClause,
+      orderBy: { createdAt: 'desc' },
+      take: 50, // Batasi 50 notif terbaru agar ringan
+    });
+  }
+
+  async markAsRead(id: string, userId: string) {
+    const notif = await this.prisma.notification.findUnique({ where: { id } });
+    if (!notif) throw new NotFoundException('Notifikasi tidak ditemukan');
+
+    // Keamanan: Pastikan user hanya bisa membaca notifikasinya sendiri
+    if (notif.userId !== userId) {
+      throw new ForbiddenException('Anda tidak berhak membaca notifikasi ini');
+    }
+
+    return this.prisma.notification.update({
+      where: { id },
+      data: {
+        isRead: true,
+        readAt: new Date(),
+      },
+    });
+  }
+
+  // Fungsi baru: Tandai semua sudah dibaca
+  async markAllAsRead(userId: string) {
+    return this.prisma.notification.updateMany({
+      where: {
+        userId,
+        isRead: false,
+        isDeleted: false,
+      },
+      data: {
+        isRead: true,
+        readAt: new Date(),
+      },
+    });
+  }
+
+  // Fungsi baru: Soft delete notifikasi
+  async softDelete(id: string, userId: string) {
+    const notif = await this.prisma.notification.findUnique({ where: { id } });
+    if (!notif) throw new NotFoundException('Notifikasi tidak ditemukan');
+
+    if (notif.userId !== userId) {
+      throw new ForbiddenException('Anda tidak berhak menghapus notifikasi ini');
+    }
+
+    return this.prisma.notification.update({
+      where: { id },
+      data: { isDeleted: true },
+    });
+  }
+
+  // Fitur hapus semua notifikasi milik user
+  async deleteAll(userId: string) {
+    return this.prisma.notification.deleteMany({
+      where: { userId: userId }
+    });
+  }
+
+  // ===========================================================================
+  // 2. FUNGSI SAKTI UNTUK MEMBUAT NOTIFIKASI (Dipakai oleh service lain)
+  // ===========================================================================
+
+  async createNotification(data: {
+    userId: string;
+    type: NotificationType;
+    title: string;
+    message: string;
+    metadata?: any;
+  }) {
+    return this.prisma.notification.create({
+      data: {
+        userId: data.userId,
+        type: data.type,
+        title: data.title,
+        message: data.message,
+        metadata: data.metadata || {},
+      },
+    });
+  }
+
+  // ===========================================================================
+  // 3. FUNGSI EMAIL BAWAAN
+  // ===========================================================================
 
   async sendOtpEmail(email: string, code: string, name: string) {
-    await this.transporter.sendMail({
-      from: `"WiFi Management" <${process.env.GMAIL_USER}>`,
-      to: email,
-      subject: 'Kode OTP Login Kamu',
-      html: `
-        <h2>Halo ${name}!</h2>
-        <p>Kode OTP kamu adalah:</p>
-        <h1 style="letter-spacing: 8px; color: #2563eb;">${code}</h1>
-        <p>Kode berlaku <strong>5 menit</strong>. Jangan bagikan ke siapapun.</p>
+    try {
+      await this.transporter.sendMail({
+        from: `"CAKRANA WiFi" <${process.env.GMAIL_USER}>`,
+        to: email,
+        subject: `Kode OTP Login Kamu - ${code}`,
+        html: `
+        <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px">
+          <div style="background:#1A1A1A;padding:20px;border-radius:12px;text-align:center;margin-bottom:24px">
+            <h1 style="color:#F5A623;margin:0;letter-spacing:2px">CAKRANA</h1>
+          </div>
+          <h2>Halo, ${name}!</h2>
+          <p>Kode OTP kamu:</p>
+          <div style="background:#F4F4F5;border-radius:12px;padding:24px;text-align:center;margin:20px 0">
+            <p style="margin:0;font-size:40px;font-weight:bold;letter-spacing:12px;color:#1A1A1A">${code}</p>
+          </div>
+          <p style="color:#888;font-size:12px;text-align:center">
+            Berlaku <strong>5 menit</strong>. Jangan bagikan ke siapapun.
+          </p>
+        </div>
       `,
-    })
+      })
+      console.log(`✅ OTP email sent to ${email}`)
+    } catch (error) {
+      console.error(`❌ Failed to send OTP email to ${email}:`, error)
+    }
   }
 
   async sendActivationEmail(email: string, name: string, activationLink: string) {
-  await this.transporter.sendMail({
-    from: `"WiFi Management" <${process.env.GMAIL_USER}>`,
-    to: email,
-    subject: 'Aktifkan Akun WiFi Kamu',
-    html: `
-      <h2>Halo ${name}! 🎉</h2>
-      <p>Pendaftaran kamu telah disetujui!</p>
-      <p>Klik tombol di bawah untuk mengaktifkan akun dan membuat password:</p>
-      <a href="${activationLink}" 
-         style="background:#2563eb;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;margin:16px 0">
-        Aktifkan Akun
-      </a>
-      <p>Link berlaku <strong>7 hari</strong>.</p>
-      <p>Jika kamu tidak merasa mendaftar, abaikan email ini.</p>
-    `,
-  })
-}
-async sendInvoiceEmail(
-  email: string,
-  name: string,
-  invoiceNumber: string,
-  amount: number,
-  dueDate: Date,
-) {
-  const formattedAmount = new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-  }).format(amount)
-
-  const formattedDate = new Intl.DateTimeFormat('id-ID', {
-    dateStyle: 'long',
-  }).format(dueDate)
-
-  await this.transporter.sendMail({
-    from: `"WiFi Management" <${process.env.GMAIL_USER}>`,
-    to: email,
-    subject: `Tagihan WiFi ${invoiceNumber}`,
-    html: `
-      <h2>Halo ${name}!</h2>
-      <p>Tagihan WiFi bulan ini sudah tersedia.</p>
-      <table style="border-collapse:collapse;width:100%;max-width:400px">
-        <tr>
-          <td style="padding:8px;border:1px solid #e5e7eb">Nomor Invoice</td>
-          <td style="padding:8px;border:1px solid #e5e7eb"><strong>${invoiceNumber}</strong></td>
-        </tr>
-        <tr>
-          <td style="padding:8px;border:1px solid #e5e7eb">Total Tagihan</td>
-          <td style="padding:8px;border:1px solid #e5e7eb"><strong>${formattedAmount}</strong></td>
-        </tr>
-        <tr>
-          <td style="padding:8px;border:1px solid #e5e7eb">Jatuh Tempo</td>
-          <td style="padding:8px;border:1px solid #e5e7eb"><strong>${formattedDate}</strong></td>
-        </tr>
-      </table>
-      <p style="margin-top:16px">Segera lakukan pembayaran sebelum jatuh tempo untuk menghindari denda.</p>
-    `,
-  })
-}
-
-async sendPaymentConfirmationEmail(
-  email: string,
-  name: string,
-  paymentCode: string,
-  amount: number,
-) {
-  const formattedAmount = new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-  }).format(amount)
-
-  await this.transporter.sendMail({
-    from: `"WiFi Management" <${process.env.GMAIL_USER}>`,
-    to: email,
-    subject: `Pembayaran ${paymentCode} Berhasil`,
-    html: `
-      <h2>Halo ${name}! 🎉</h2>
-      <p>Pembayaran kamu telah dikonfirmasi!</p>
-      <table style="border-collapse:collapse;width:100%;max-width:400px">
-        <tr>
-          <td style="padding:8px;border:1px solid #e5e7eb">Kode Pembayaran</td>
-          <td style="padding:8px;border:1px solid #e5e7eb"><strong>${paymentCode}</strong></td>
-        </tr>
-        <tr>
-          <td style="padding:8px;border:1px solid #e5e7eb">Jumlah</td>
-          <td style="padding:8px;border:1px solid #e5e7eb"><strong>${formattedAmount}</strong></td>
-        </tr>
-      </table>
-      <p style="margin-top:16px;color:#16a34a">✅ Internet kamu sudah aktif kembali!</p>
-    `,
-  })
-}
-
+    try {
+      await this.transporter.sendMail({
+        from: `"CAKRANA WiFi" <${process.env.GMAIL_USER}>`,
+        to: email,
+        subject: 'Aktifkan Akun CAKRANA Kamu',
+        html: `
+        <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px">
+          <div style="background:#1A1A1A;padding:20px;border-radius:12px;text-align:center;margin-bottom:24px">
+            <h1 style="color:#F5A623;margin:0;letter-spacing:2px">CAKRANA</h1>
+          </div>
+          <h2>Selamat datang, ${name}! 🎉</h2>
+          <p>Pendaftaran kamu telah disetujui. Klik tombol di bawah untuk mengaktifkan akun:</p>
+          <div style="text-align:center;margin:28px 0">
+            <a href="${activationLink}"
+              style="background:#F5A623;color:#1A1A1A;padding:14px 32px;border-radius:10px;
+                     text-decoration:none;font-weight:bold;font-size:15px;display:inline-block">
+              Aktifkan Akun →
+            </a>
+          </div>
+          <p style="color:#888;font-size:12px">Link berlaku <strong>7 hari</strong>.</p>
+        </div>
+      `,
+      })
+      console.log(`✅ Activation email sent to ${email}`)
+    } catch (error) {
+      console.error(`❌ Failed to send activation email to ${email}:`, error)
+    }
+  }
 }

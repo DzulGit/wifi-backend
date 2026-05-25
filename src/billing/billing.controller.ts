@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Request } from '@nestjs/common'
+import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Request, ForbiddenException } from '@nestjs/common'
 import { BillingService } from './billing.service'
 import { AuthGuard } from '@nestjs/passport'
 
@@ -7,13 +7,23 @@ import { AuthGuard } from '@nestjs/passport'
 export class BillingController {
   constructor(private billingService: BillingService) {}
 
+  // SECURITY FIX: Helper untuk memastikan hanya admin yang bisa mengakses
+  private requireAdmin(req: any) {
+    if (req.user?.type !== 'admin') {
+      throw new ForbiddenException('Hanya admin yang boleh mengakses')
+    }
+  }
+
   @Get('stats')
-  getStats() {
+  getStats(@Request() req: any) {
+    this.requireAdmin(req)
     return this.billingService.getStats()
   }
 
+  // 👇 PERUBAHAN UNTUK USER: Hapus requireAdmin & Kunci ID Pencarian 👇
   @Get()
   findAll(
+    @Request() req: any,
     @Query('status') status?: string,
     @Query('userId') userId?: string,
     @Query('month') month?: string,
@@ -21,9 +31,17 @@ export class BillingController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
+    // Kita tentukan target pencarian userId
+    let targetUserId = userId;
+    
+    // Jika yang login BUKAN admin, paksa target pencarian ke ID dia sendiri
+    if (req.user?.type !== 'admin') {
+      targetUserId = req.user.id;
+    }
+
     return this.billingService.findAll({
       status,
-      userId,
+      userId: targetUserId, // Pakai targetUserId yang sudah diamankan
       month: month ? parseInt(month) : undefined,
       year: year ? parseInt(year) : undefined,
       page: page ? parseInt(page) : 1,
@@ -31,30 +49,34 @@ export class BillingController {
     })
   }
 
+  // 👇 PERUBAHAN UNTUK USER: Hapus requireAdmin agar bisa lihat detail 👇
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id') id: string, @Request() req: any) {
     return this.billingService.findOne(id)
   }
 
   @Post('generate/:userId')
   generateInvoice(
     @Param('userId') userId: string,
-    @Request() req,
+    @Request() req: any,
     @Body() body: { billingMonth?: number; billingYear?: number },
   ) {
+    this.requireAdmin(req)
     return this.billingService.generateInvoice(userId, req.user.id, body.billingMonth, body.billingYear)
   }
 
   @Post('generate-bulk')
   generateBulk(
-    @Request() req,
+    @Request() req: any,
     @Body() body: { billingMonth?: number; billingYear?: number },
   ) {
+    this.requireAdmin(req)
     return this.billingService.generateBulkInvoices(req.user.id, body.billingMonth, body.billingYear)
   }
 
   @Patch(':id/penalty')
-  addPenalty(@Param('id') id: string) {
+  addPenalty(@Param('id') id: string, @Request() req: any) {
+    this.requireAdmin(req)
     return this.billingService.addPenalty(id)
   }
 }

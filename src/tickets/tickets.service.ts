@@ -1,16 +1,39 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { NotificationsService } from '../notifications/notifications.service'
+import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service'
+import { AdminNotificationHelper } from '../admin-notifications/admin-notification.helper'
 
 @Injectable()
 export class TicketsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationsService,
+    private adminNotifications: AdminNotificationsService,
+  ) {}
 
-  // ── Generate ticket number ────────────────────────────────
+  // ── Generate ticket number with retry logic ───────────────
   private async generateTicketNumber(): Promise<string> {
-    const count = await this.prisma.ticket.count()
     const year = new Date().getFullYear()
     const month = String(new Date().getMonth() + 1).padStart(2, '0')
-    return `TKT-${year}${month}-${String(count + 1).padStart(4, '0')}`
+    const maxAttempts = 5
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const count = await this.prisma.ticket.count()
+      const ticketNumber = `TKT-${year}${month}-${String(count + 1 + attempt).padStart(4, '0')}`
+      
+      const existing = await this.prisma.ticket.findUnique({
+        where: { ticketNumber },
+      })
+      
+      if (!existing) {
+        return ticketNumber
+      }
+    }
+
+    // Fallback: append timestamp for absolute uniqueness
+    const timestamp = Date.now()
+    return `TKT-${year}${month}-${String(timestamp).slice(-4)}`
   }
 
   // ── Buat tiket (oleh user) ────────────────────────────────
@@ -26,7 +49,7 @@ export class TicketsService {
 
     const ticketNumber = await this.generateTicketNumber()
 
-    return this.prisma.ticket.create({
+    const ticket = await this.prisma.ticket.create({
       data: {
         ticketNumber,
         userId,
@@ -38,6 +61,18 @@ export class TicketsService {
         status: 'OPEN',
       },
     })
+
+    // 👇 ADMIN NOTIFICATION 👇
+    await AdminNotificationHelper.ticketCreated(this.adminNotifications, {
+      userName: user.fullName,
+      ticketNumber: ticket.ticketNumber,
+      title: ticket.title,
+      priority: ticket.priority,
+      ticketId: ticket.id,
+    });
+    // 👆 SELESAI 👆
+
+    return ticket
   }
 
   // ── Get all tickets ───────────────────────────────────────
@@ -98,12 +133,18 @@ export class TicketsService {
   async reply(ticketId: string, data: {
     message: string
     isFromAdmin: boolean
+    userId?: string
     adminId?: string
     attachmentUrl?: string
   }) {
     const ticket = await this.prisma.ticket.findUnique({ where: { id: ticketId } })
     if (!ticket) throw new NotFoundException('Tiket tidak ditemukan')
     if (ticket.status === 'CLOSED') throw new BadRequestException('Tiket sudah ditutup')
+
+    // SECURITY FIX: Ownership check - non-admin users can only reply to their own tickets
+    if (!data.isFromAdmin && data.userId && ticket.userId !== data.userId) {
+      throw new ForbiddenException('Tidak memiliki akses ke tiket ini')
+    }
 
     const reply = await this.prisma.ticketReply.create({
       data: {
@@ -123,6 +164,31 @@ export class TicketsService {
       })
     }
 
+    // 👇 1. NOTIFIKASI BALASAN TIKET DITANAM DI SINI 👇
+    if (data.isFromAdmin) {
+      await this.notifications.createNotification({
+        userId: ticket.userId,
+        type: 'TICKET_REPLIED' as any,
+        title: 'Tiket Dibalas Admin 🎧',
+        message: `Admin telah membalas tiket pengaduan kamu (#${ticket.ticketNumber}). Silakan cek balasan terbaru.`,
+        metadata: { ticketId: ticket.id }
+      });
+
+      // 👇 ADMIN NOTIFICATION (INFO: Someone replied to ticket) 👇
+      const admin = await this.prisma.admin.findUnique({
+        where: { id: data.adminId || '' },
+      })
+      if (admin) {
+        await AdminNotificationHelper.ticketReplied(this.adminNotifications, {
+          ticketNumber: ticket.ticketNumber,
+          replierName: admin.fullName,
+          ticketId: ticket.id,
+        });
+      }
+      // 👆 SELESAI 👆
+    }
+    // 👆 SELESAI 👆
+
     return reply
   }
 
@@ -131,13 +197,27 @@ export class TicketsService {
     const ticket = await this.prisma.ticket.findUnique({ where: { id } })
     if (!ticket) throw new NotFoundException('Tiket tidak ditemukan')
 
-    return this.prisma.ticket.update({
+    const updatedTicket = await this.prisma.ticket.update({
       where: { id },
       data: {
         status: status as any,
         resolvedAt: status === 'RESOLVED' ? new Date() : undefined,
       },
     })
+
+    // 👇 2. NOTIFIKASI UPDATE STATUS DITANAM DI SINI 👇
+    if (status === 'RESOLVED' || status === 'CLOSED') {
+      await this.notifications.createNotification({
+        userId: ticket.userId,
+        type: 'TICKET_REPLIED' as any,
+        title: 'Status Pengaduan Diperbarui ✅',
+        message: `Tiket pengaduan kamu (#${ticket.ticketNumber}) sekarang berstatus ${status}. Terima kasih telah menghubungi kami.`,
+        metadata: { ticketId: ticket.id }
+      });
+    }
+    // 👆 SELESAI 👆
+
+    return updatedTicket
   }
 
   // ── Stats tiket ───────────────────────────────────────────

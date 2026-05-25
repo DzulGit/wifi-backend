@@ -1,10 +1,17 @@
-import { Controller, Get, Post, Body, Param, Patch, Query, UseGuards, Request } from '@nestjs/common'
+import { Controller, Get, Post, Body, Param, Patch, Query, UseGuards, Request, ForbiddenException } from '@nestjs/common'
 import { RegistrationsService } from './registrations.service'
 import { AuthGuard } from '@nestjs/passport'
 
 @Controller('registrations')
 export class RegistrationsController {
   constructor(private registrationsService: RegistrationsService) {}
+
+  // SECURITY FIX: Helper untuk memastikan hanya admin yang bisa mengakses
+  private requireAdmin(req: any) {
+    if (req.user?.type !== 'admin') {
+      throw new ForbiddenException('Hanya admin yang boleh mengakses')
+    }
+  }
 
   // Public — dari landing page
   @Post()
@@ -26,18 +33,21 @@ export class RegistrationsController {
   // Protected — admin only
   @UseGuards(AuthGuard('jwt'))
   @Get('stats')
-  getStats() {
+  getStats(@Request() req: any) {
+    this.requireAdmin(req)
     return this.registrationsService.getStats()
   }
 
   @UseGuards(AuthGuard('jwt'))
   @Get()
   findAll(
+    @Request() req: any,
     @Query('status') status?: string,
     @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
+    this.requireAdmin(req)
     return this.registrationsService.findAll({
       status,
       search,
@@ -48,13 +58,15 @@ export class RegistrationsController {
 
   @UseGuards(AuthGuard('jwt'))
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id') id: string, @Request() req: any) {
+    this.requireAdmin(req)
     return this.registrationsService.findOne(id)
   }
 
   @UseGuards(AuthGuard('jwt'))
   @Patch(':id/approve')
-  approve(@Param('id') id: string, @Request() req) {
+  approve(@Param('id') id: string, @Request() req: any) {
+    this.requireAdmin(req)
     return this.registrationsService.approve(id, req.user.id)
   }
 
@@ -62,9 +74,10 @@ export class RegistrationsController {
   @Patch(':id/reject')
   reject(
     @Param('id') id: string,
-    @Request() req,
+    @Request() req: any,
     @Body() body: { reason: string },
   ) {
+    this.requireAdmin(req)
     return this.registrationsService.reject(id, req.user.id, body.reason)
   }
 }

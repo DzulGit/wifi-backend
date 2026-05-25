@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Request } from '@nestjs/common'
+import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Request, ForbiddenException, BadRequestException } from '@nestjs/common'
 import { TicketsService } from './tickets.service'
 import { AuthGuard } from '@nestjs/passport'
 
@@ -7,8 +7,16 @@ import { AuthGuard } from '@nestjs/passport'
 export class TicketsController {
   constructor(private ticketsService: TicketsService) {}
 
+  // SECURITY FIX: Helper untuk memastikan hanya admin yang bisa mengakses
+  private requireAdmin(req: any) {
+    if (req.user?.type !== 'admin') {
+      throw new ForbiddenException('Hanya admin yang boleh mengakses')
+    }
+  }
+
   @Get('stats')
-  getStats() {
+  getStats(@Request() req: any) {
+    this.requireAdmin(req)
     return this.ticketsService.getStats()
   }
 
@@ -35,7 +43,7 @@ export class TicketsController {
   }
 
   @Post()
-  create(@Request() req, @Body() body: {
+  create(@Request() req: any, @Body() body: {
     title: string
     description: string
     category: string
@@ -48,13 +56,14 @@ export class TicketsController {
   @Post(':id/reply')
   reply(
     @Param('id') id: string,
-    @Request() req,
+    @Request() req: any,
     @Body() body: { message: string; attachmentUrl?: string },
   ) {
     const isAdmin = req.user.type === 'admin'
     return this.ticketsService.reply(id, {
       message: body.message,
       isFromAdmin: isAdmin,
+      userId: req.user.id,
       adminId: isAdmin ? req.user.id : undefined,
       attachmentUrl: body.attachmentUrl,
     })
@@ -64,7 +73,17 @@ export class TicketsController {
   updateStatus(
     @Param('id') id: string,
     @Body() body: { status: string },
+    @Request() req: any,
   ) {
+    // SECURITY FIX: Hanya admin yang bisa ubah status tiket
+    if (req.user?.type !== 'admin') {
+      throw new ForbiddenException('Hanya admin yang bisa mengubah status tiket')
+    }
+    // SECURITY FIX: Validasi status agar tidak bisa diisi string sembarang
+    const validStatuses = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED']
+    if (!validStatuses.includes(body.status)) {
+      throw new BadRequestException('Status tiket tidak valid')
+    }
     return this.ticketsService.updateStatus(id, body.status)
   }
 }

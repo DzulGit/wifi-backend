@@ -8,6 +8,10 @@ import { JwtService } from '@nestjs/jwt'
 import { PrismaService } from '../prisma/prisma.service'
 import { NotificationsService } from '../notifications/notifications.service'
 import * as bcrypt from 'bcrypt'
+import { randomInt } from 'crypto'
+
+// Minimum password strength: min 8 chars, huruf besar, huruf kecil, angka
+const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/
 
 @Injectable()
 export class AuthService {
@@ -22,17 +26,32 @@ export class AuthService {
     return safe
   }
 
-  // ── Generate 6 digit OTP ──────────────────────────────────
+  // ── Generate 6-digit OTP menggunakan crypto (bukan Math.random) ──────────
+  // SECURITY FIX: Math.random() tidak cryptographically secure
   private generateOtp(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString()
+    return String(randomInt(100000, 999999))
   }
 
-  // ── Send OTP via email ────────────────────────────────────
+  // ── Validasi kekuatan password ────────────────────────────────────────────
+  private validatePasswordStrength(password: string): void {
+    if (!PASSWORD_REGEX.test(password)) {
+      throw new BadRequestException(
+        'Password minimal 8 karakter, mengandung huruf besar, huruf kecil, dan angka',
+      )
+    }
+  }
+
+  // ── Send OTP via email ────────────────────────────────────────────────────
   async sendOtp(email: string) {
     const user = await this.prisma.user.findFirst({
       where: { email, status: { not: 'INACTIVE' } },
     })
-    if (!user) throw new NotFoundException('Email tidak terdaftar')
+
+    // SECURITY FIX: Jangan reveal apakah email terdaftar atau tidak
+    // Response sama apakah email ada atau tidak (mencegah user enumeration)
+    if (!user) {
+      return { message: 'Jika email terdaftar, OTP akan dikirim dalam beberapa saat' }
+    }
 
     const recentOtp = await this.prisma.otpCode.findFirst({
       where: {
@@ -42,6 +61,7 @@ export class AuthService {
         createdAt: { gt: new Date(Date.now() - 60 * 1000) },
       },
     })
+
     if (recentOtp) {
       throw new BadRequestException('Tunggu 1 menit sebelum kirim OTP lagi')
     }
@@ -55,10 +75,10 @@ export class AuthService {
 
     await this.notifications.sendOtpEmail(email, code, user.fullName)
 
-    return { message: 'OTP berhasil dikirim ke email kamu' }
+    return { message: 'Jika email terdaftar, OTP akan dikirim dalam beberapa saat' }
   }
 
-  // ── Verify OTP ────────────────────────────────────────────
+  // ── Verify OTP ────────────────────────────────────────────────────────────
   async verifyOtp(email: string, code: string) {
     const otp = await this.prisma.otpCode.findFirst({
       where: { email, isUsed: false, expiresAt: { gt: new Date() } },
@@ -86,27 +106,32 @@ export class AuthService {
 
     const user = await this.prisma.user.findFirst({ where: { email } })
     if (!user) throw new UnauthorizedException('User tidak ditemukan')
-    const token = this.jwt.sign({ sub: user.id, type: 'user' })
 
+    const token = this.jwt.sign({ sub: user.id, type: 'user' })
     return { token, user: this.excludePassword(user) }
   }
 
-  // ── Login dengan password ─────────────────────────────────
+  // ── Login dengan password ─────────────────────────────────────────────────
   async loginWithPassword(email: string, password: string, ip?: string) {
     const user = await this.prisma.user.findFirst({ where: { email } })
 
+    // Log percobaan awal (sebelum validasi)
     await this.prisma.loginLog.create({
       data: {
         userId: user?.id ?? null,
         ipAddress: ip ?? 'unknown',
         isSuccess: false,
         failReason: !user ? 'user_not_found' : 'pending',
-      }
+      },
     }).catch(() => {})
 
     if (!user || !user.password) {
+      // SECURITY FIX: Lakukan bcrypt dummy supaya response time seragam
+      // (mencegah timing attack untuk deteksi email yang terdaftar)
+      await bcrypt.compare(password, '$2b$10$dummyhashfordummypurposesonly12345678')
       throw new UnauthorizedException('Email atau password salah')
     }
+
     if (user.status === 'INACTIVE') {
       throw new UnauthorizedException('Akun tidak aktif')
     }
@@ -116,12 +141,14 @@ export class AuthService {
         userId: user.id,
         isSuccess: false,
         failReason: { not: 'pending' },
-        loginAt: { gte: new Date(Date.now() - 15 * 60 * 1000) }
-      }
+        loginAt: { gte: new Date(Date.now() - 15 * 60 * 1000) },
+      },
     })
 
     if (recentFails >= 5) {
-      throw new UnauthorizedException('Akun terkunci sementara karena terlalu banyak percobaan gagal. Coba lagi dalam 15 menit.')
+      throw new UnauthorizedException(
+        'Akun terkunci sementara karena terlalu banyak percobaan gagal. Coba lagi dalam 15 menit.',
+      )
     }
 
     const isMatch = await bcrypt.compare(password, user.password)
@@ -129,7 +156,7 @@ export class AuthService {
     if (!isMatch) {
       await this.prisma.loginLog.updateMany({
         where: { userId: user.id, failReason: 'pending' },
-        data: { failReason: 'wrong_password' }
+        data: { failReason: 'wrong_password' },
       }).catch(() => {})
       throw new UnauthorizedException('Email atau password salah')
     }
@@ -139,25 +166,27 @@ export class AuthService {
         userId: user.id,
         ipAddress: ip ?? 'unknown',
         isSuccess: true,
-      }
+      },
     }).catch(() => {})
 
     const token = this.jwt.sign({ sub: user.id, type: 'user' })
     return { token, user: this.excludePassword(user) }
   }
 
-  // ── Login admin ───────────────────────────────────────────
+  // ── Login admin ───────────────────────────────────────────────────────────
   async loginAdmin(email: string, password: string, ip?: string) {
     const admin = await this.prisma.admin.findUnique({ where: { email } })
 
     if (!admin || !admin.isActive) {
+      // SECURITY FIX: Dummy bcrypt untuk timing consistency
+      await bcrypt.compare(password, '$2b$10$dummyhashfordummypurposesonly12345678')
       await this.prisma.loginLog.create({
         data: {
-          adminId: admin?.id ?? null,
+          adminId: null,
           ipAddress: ip ?? 'unknown',
           isSuccess: false,
           failReason: 'invalid_credentials',
-        }
+        },
       }).catch(() => {})
       throw new UnauthorizedException('Email atau password salah')
     }
@@ -166,12 +195,14 @@ export class AuthService {
       where: {
         adminId: admin.id,
         isSuccess: false,
-        loginAt: { gte: new Date(Date.now() - 15 * 60 * 1000) }
-      }
+        loginAt: { gte: new Date(Date.now() - 15 * 60 * 1000) },
+      },
     })
 
     if (recentFails >= 3) {
-      throw new UnauthorizedException('Akun admin terkunci sementara. Coba lagi dalam 15 menit.')
+      throw new UnauthorizedException(
+        'Akun admin terkunci sementara. Coba lagi dalam 15 menit.',
+      )
     }
 
     const isMatch = await bcrypt.compare(password, admin.password)
@@ -183,7 +214,7 @@ export class AuthService {
           ipAddress: ip ?? 'unknown',
           isSuccess: false,
           failReason: 'wrong_password',
-        }
+        },
       }).catch(() => {})
       throw new UnauthorizedException('Email atau password salah')
     }
@@ -193,20 +224,20 @@ export class AuthService {
         adminId: admin.id,
         ipAddress: ip ?? 'unknown',
         isSuccess: true,
-      }
+      },
     }).catch(() => {})
 
     await this.prisma.admin.update({
       where: { id: admin.id },
-      data: { lastLoginAt: new Date() }
+      data: { lastLoginAt: new Date() },
     })
 
     const token = this.jwt.sign({ sub: admin.id, type: 'admin' })
-    const { password: adminPassword, ...safeAdmin } = admin
+    const { password: _adminPassword, ...safeAdmin } = admin
     return { token, admin: safeAdmin }
   }
 
-  // ── Aktivasi akun ─────────────────────────────────────────
+  // ── Aktivasi akun ─────────────────────────────────────────────────────────
   async activateAccount(token: string, password: string) {
     const user = await this.prisma.user.findFirst({
       where: {
@@ -214,9 +245,14 @@ export class AuthService {
         activationExpiry: { gt: new Date() },
       },
     })
+
     if (!user) throw new BadRequestException('Link aktivasi tidak valid atau sudah expired')
 
-    const hashed = await bcrypt.hash(password, 10)
+    // SECURITY FIX: Validasi kekuatan password saat aktivasi
+    this.validatePasswordStrength(password)
+
+    const hashed = await bcrypt.hash(password, 12) // FIX: naikkan cost factor dari 10 → 12
+
     await this.prisma.user.update({
       where: { id: user.id },
       data: {
@@ -232,30 +268,34 @@ export class AuthService {
     return { token: jwtToken, message: 'Akun berhasil diaktifkan' }
   }
 
-  // ── Ganti Password (FITUR BARU) ───────────────────────────
+  // ── Ganti Password ────────────────────────────────────────────────────────
   async changePassword(userId: string, oldPassword: string, newPassword: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
+    const user = await this.prisma.user.findUnique({ where: { id: userId } })
 
-    if (!user) throw new NotFoundException('User tidak ditemukan');
-    if (!user.password) throw new BadRequestException('User belum mengatur password');
+    if (!user) throw new NotFoundException('User tidak ditemukan')
+    if (!user.password) throw new BadRequestException('User belum mengatur password')
 
-    // 1. Verifikasi password lama
-    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    const isMatch = await bcrypt.compare(oldPassword, user.password)
     if (!isMatch) {
-      throw new BadRequestException('Password lama salah');
+      throw new BadRequestException('Password lama salah')
     }
 
-    // 2. Hash password baru
-    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+    // SECURITY FIX: Validasi kekuatan password baru
+    this.validatePasswordStrength(newPassword)
 
-    // 3. Simpan ke database
+    // SECURITY FIX: Cegah penggunaan password yang sama
+    const isSame = await bcrypt.compare(newPassword, user.password)
+    if (isSame) {
+      throw new BadRequestException('Password baru tidak boleh sama dengan password lama')
+    }
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 12)
+
     await this.prisma.user.update({
       where: { id: userId },
       data: { password: hashedNewPassword },
-    });
+    })
 
-    return { message: 'Password berhasil diubah' };
+    return { message: 'Password berhasil diubah' }
   }
 }

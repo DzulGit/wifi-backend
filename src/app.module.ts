@@ -10,10 +10,18 @@ import { RegistrationsModule } from './registrations/registrations.module'
 import { BillingModule } from './billing/billing.module'
 import { PaymentsModule } from './payments/payments.module'
 import { TicketsModule } from './tickets/tickets.module'
-import { AdminNotificationsModule } from './admin-notifications/admin-notifications.module' // ← tambah
+import { AdminNotificationsModule } from './admin-notifications/admin-notifications.module'
+import { AvatarsModule } from './avatars/avatars.module' 
+import { ScheduleModule } from '@nestjs/schedule';
+import { NotificationsModule } from './notifications/notifications.module'
+import { ServiceRequestsModule } from './service-request/service-requests.module';
+import { ActivityLogsModule } from './activity-logs/activity-logs.module'
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
+    NotificationsModule,
+    ServiceRequestsModule,
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([
       {
@@ -35,7 +43,9 @@ import { AdminNotificationsModule } from './admin-notifications/admin-notificati
     BillingModule,
     PaymentsModule,
     TicketsModule,
-    AdminNotificationsModule, // ← tambah
+    AdminNotificationsModule,
+    AvatarsModule,
+    ActivityLogsModule,
   ],
   providers: [
     {
